@@ -160,6 +160,7 @@ if(HIP_LIBRARY)
                 -I${CMAKE_SOURCE_DIR}/src
                 -std=c++17
                 -O3
+                -fPIC
                 -c
                 ${CMAKE_SOURCE_DIR}/src/gpu/feature_kernels.cu
                 -o ${HIP_FEATURE_OBJ}
