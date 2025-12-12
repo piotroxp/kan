@@ -153,6 +153,9 @@ private:
             // Use static initialization to ensure memory limits are set only once
             static std::once_flag init_flag;
             std::call_once(init_flag, []() {
+                // Ensure HIP device is set
+                hipSetDevice(0);
+                
                 hipDeviceProp_t prop;
                 hipError_t err = hipGetDeviceProperties(&prop, 0);
                 if (err == hipSuccess) {
