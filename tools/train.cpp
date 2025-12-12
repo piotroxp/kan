@@ -1,10 +1,16 @@
 #include <iostream>
 #include "training/training_session.hpp"
+#include "training/gpu_config.hpp"
 #include "model/speech_model.hpp"
 
 int main(int argc, char* argv[]) {
     std::cout << "=== KAN Speech Model Training ===" << std::endl;
     std::cout << std::endl;
+    
+    // Print GPU info
+    GPUTrainingConfig::print_gpu_info();
+    bool use_gpu = GPUTrainingConfig::use_gpu();
+    (void)use_gpu;  // Suppress unused warning for now
     
     // Parse arguments (simplified)
     size_t batch_size = 32;

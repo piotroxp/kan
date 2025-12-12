@@ -12,8 +12,32 @@ elseif(EXISTS "${CMAKE_BINARY_DIR}/conan_toolchain.cmake")
     include(${CMAKE_BINARY_DIR}/conan_toolchain.cmake)
 endif()
 
-# Find packages
-find_package(Eigen3 REQUIRED)
+# Find ROCm/HIP
+find_path(HIP_INCLUDE_DIR
+    NAMES hip/hip_runtime.h
+    PATHS /opt/rocm/include
+    NO_DEFAULT_PATH
+)
+
+if(HIP_INCLUDE_DIR)
+    message(STATUS "HIP found at: ${HIP_INCLUDE_DIR}")
+    include_directories(${HIP_INCLUDE_DIR})
+    
+    # Find HIP libraries
+    find_library(HIP_LIBRARY
+        NAMES amdhip64 hip_hcc
+        PATHS /opt/rocm/lib /opt/rocm/lib64
+        NO_DEFAULT_PATH
+    )
+    
+    if(HIP_LIBRARY)
+        message(STATUS "HIP library found: ${HIP_LIBRARY}")
+    else()
+        message(STATUS "HIP library not found - will compile without GPU support")
+    endif()
+else()
+    message(STATUS "HIP not found - using CPU fallback")
+endif()
 
 # Optional packages for tests
 option(BUILD_TESTS "Build tests" ON)
@@ -56,6 +80,7 @@ set(TRAINING_SOURCES
     src/training/trainer.cpp
     src/training/gradients.cpp
     src/training/training_session.cpp
+    src/training/gpu_config.cpp
 )
 
 set(MODEL_SOURCES
@@ -63,8 +88,9 @@ set(MODEL_SOURCES
     src/model/language_model.cpp
 )
 
-set(INFERENCE_SOURCES
-    src/inference/inference_engine.cpp
+set(GPU_SOURCES
+    src/gpu/rocm_manager.cpp
+    src/gpu/hip_kernels.cpp
 )
 
 # Library
@@ -76,11 +102,15 @@ add_library(kan_speech_model STATIC
     ${TRAINING_SOURCES}
     ${MODEL_SOURCES}
     ${INFERENCE_SOURCES}
+    ${GPU_SOURCES}
 )
 
-target_link_libraries(kan_speech_model PUBLIC
-    Eigen3::Eigen
-)
+# Link HIP if available
+if(HIP_LIBRARY)
+    target_link_libraries(kan_speech_model PUBLIC ${HIP_LIBRARY})
+    target_compile_definitions(kan_speech_model PRIVATE USE_HIP __HIP_PLATFORM_AMD__)
+    message(STATUS "GPU support enabled with HIP (AMD)")
+endif()
 
 # Example executables
 add_executable(example src/example/main.cpp)
