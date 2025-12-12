@@ -93,6 +93,46 @@ set(GPU_SOURCES
     src/gpu/hip_kernels.cpp
 )
 
+# HIP kernel sources (compiled with hipcc)
+if(HIP_LIBRARY)
+    # Find hipcc
+    find_program(HIPCC_EXECUTABLE
+        NAMES hipcc
+        PATHS /opt/rocm/bin
+        NO_DEFAULT_PATH
+    )
+    
+    if(HIPCC_EXECUTABLE)
+        message(STATUS "Found hipcc: ${HIPCC_EXECUTABLE}")
+        
+        # Compile .cu file with hipcc as a custom command
+        set(HIP_KERNEL_OBJ ${CMAKE_BINARY_DIR}/CMakeFiles/kan_speech_model.dir/src/gpu/hip_kernels.cu.o)
+        
+        add_custom_command(
+            OUTPUT ${HIP_KERNEL_OBJ}
+            COMMAND ${HIPCC_EXECUTABLE}
+                -DUSE_HIP
+                -D__HIP_PLATFORM_AMD__
+                -I${HIP_INCLUDE_DIR}
+                -I${CMAKE_SOURCE_DIR}/src
+                -std=c++17
+                -O3
+                -c
+                ${CMAKE_SOURCE_DIR}/src/gpu/hip_kernels.cu
+                -o ${HIP_KERNEL_OBJ}
+            DEPENDS ${CMAKE_SOURCE_DIR}/src/gpu/hip_kernels.cu
+                    ${CMAKE_SOURCE_DIR}/src/gpu/hip_kernels.hpp
+            COMMENT "Compiling HIP kernels with hipcc"
+        )
+        
+        # Add the object file to sources
+        set(GPU_SOURCES ${GPU_SOURCES} ${HIP_KERNEL_OBJ})
+        message(STATUS "GPU kernels will be compiled with hipcc")
+    else()
+        message(WARNING "hipcc not found - GPU kernels will not be compiled")
+    endif()
+endif()
+
 # Library
 add_library(kan_speech_model STATIC
     ${CORE_SOURCES}

@@ -22,7 +22,8 @@ public:
         gpu_available_ = (err == hipSuccess && deviceCount > 0);
         
         if (gpu_available_) {
-            hipSetDevice(0);  // Use first device
+            hipError_t err = hipSetDevice(0);  // Use first device
+            (void)err;  // Ignore errors for initialization
         } else {
             gpu_available_ = false;
         }
@@ -100,7 +101,8 @@ public:
     void synchronize() {
 #ifdef USE_HIP
         if (gpu_available_) {
-            hipDeviceSynchronize();
+            hipError_t err = hipDeviceSynchronize();
+            (void)err;  // Ignore errors
         }
 #endif
     }
