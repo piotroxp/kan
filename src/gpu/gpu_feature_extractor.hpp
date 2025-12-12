@@ -184,32 +184,50 @@ private:
         manager_.copy_to_device(audio_flat.data(), gpu_audio, audio_size);
         
         // Launch batched mel-spectrogram kernel
-        GPU::launch_batched_mel_spectrogram(
-            static_cast<const float*>(gpu_audio),
-            static_cast<const float*>(gpu_mel_filters_),
-            static_cast<float*>(gpu_mel_spec),
-            batch_size,
-            num_samples,
-            static_cast<int>(num_frames),
-            num_bins,
-            n_mels_,
-            n_fft_,
-            hop_length_,
-            win_length_,
-            nullptr
-        );
-        
-        // Check for launch errors
+        try {
+            GPU::launch_batched_mel_spectrogram(
+                static_cast<const float*>(gpu_audio),
+                static_cast<const float*>(gpu_mel_filters_),
+                static_cast<float*>(gpu_mel_spec),
+                batch_size,
+                num_samples,
+                static_cast<int>(num_frames),
+                num_bins,
+                n_mels_,
+                n_fft_,
+                hop_length_,
+                win_length_,
+                nullptr
+            );
+            
+            // Check for launch errors immediately
 #ifdef USE_HIP
-        hipError_t err = hipGetLastError();
-        if (err != hipSuccess) {
-            std::cerr << "[GPU ERROR] Batched mel-spectrogram launch failed: " 
-                      << hipGetErrorString(err) << std::endl;
+            hipError_t err = hipGetLastError();
+            if (err != hipSuccess) {
+                std::cerr << "[GPU ERROR] Batched mel-spectrogram launch failed: " 
+                          << hipGetErrorString(err) << " (code: " << err << ")" << std::endl;
+                manager_.free(gpu_audio);
+                manager_.free(gpu_mel_spec);
+                // Fall back to CPU
+                return process_batch_cpu(audio_batch);
+            }
+            
+            // Synchronize to catch any errors
+            err = hipDeviceSynchronize();
+            if (err != hipSuccess) {
+                std::cerr << "[GPU ERROR] Kernel synchronization failed: " 
+                          << hipGetErrorString(err) << " (code: " << err << ")" << std::endl;
+                manager_.free(gpu_audio);
+                manager_.free(gpu_mel_spec);
+                return process_batch_cpu(audio_batch);
+            }
+#endif
+        } catch (...) {
+            std::cerr << "[GPU ERROR] Exception during kernel launch, falling back to CPU" << std::endl;
             manager_.free(gpu_audio);
             manager_.free(gpu_mel_spec);
-            throw std::runtime_error("GPU kernel launch failed");
+            return process_batch_cpu(audio_batch);
         }
-#endif
         
         // Synchronize
         manager_.synchronize();
@@ -239,6 +257,17 @@ private:
 #else
         throw std::runtime_error("GPU not available");
 #endif
+    }
+    
+    // CPU fallback for batch processing
+    std::vector<Tensor> process_batch_cpu(const std::vector<AudioBuffer>& audio_batch) {
+        std::vector<Tensor> results;
+        SincKANMelSpectrogram cpu_extractor(n_mels_, n_fft_, hop_length_,
+                                            win_length_, fmin_, fmax_, sample_rate_);
+        for (const auto& audio : audio_batch) {
+            results.push_back(cpu_extractor.process(audio));
+        }
+        return results;
     }
 };
 

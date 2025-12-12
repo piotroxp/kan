@@ -7,6 +7,8 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+namespace KernelFusion {
+
 // Fused B-spline KAN + activation (ReLU)
 __global__ void fused_bspline_relu_kernel(
     const float* __restrict__ x_in,
@@ -79,7 +81,6 @@ __global__ void fused_matmul_bias_relu_kernel(
     C[row * N + col] = fmaxf(0.0f, sum);
 }
 
-namespace KernelFusion {
     // Launch fused B-spline + ReLU
     void launch_fused_bspline_relu(
         const float* x_in,

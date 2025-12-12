@@ -186,15 +186,18 @@ if(HIP_LIBRARY)
             COMMENT "Compiling quantum embedding kernels with hipcc"
         )
         
-        # Add the object files to sources
-        set(GPU_SOURCES ${GPU_SOURCES} ${HIP_KERNEL_OBJ} ${HIP_FUSION_OBJ} ${HIP_FEATURE_OBJ} ${HIP_QUANTUM_OBJ})
+        # Store HIP kernel objects separately - they need to be linked directly to executables
+        # Device code from static libraries doesn't get properly extracted
+        set(HIP_KERNEL_OBJECTS ${HIP_KERNEL_OBJ} ${HIP_FUSION_OBJ} ${HIP_FEATURE_OBJ} ${HIP_QUANTUM_OBJ})
         message(STATUS "GPU kernels will be compiled with hipcc")
+        message(STATUS "HIP kernel objects will be linked directly to executables")
     else()
         message(WARNING "hipcc not found - GPU kernels will not be compiled")
     endif()
 endif()
 
-# Library
+# Library - Note: HIP kernel object files are NOT included in static library
+# because device code needs to be linked directly into executables
 add_library(kan_speech_model STATIC
     ${CORE_SOURCES}
     ${QUANTUM_SOURCES}
@@ -205,6 +208,8 @@ add_library(kan_speech_model STATIC
     ${INFERENCE_SOURCES}
     ${GPU_SOURCES}
 )
+# HIP kernel object files are added directly to executables, not the static library
+# This ensures device code is properly linked
 
 # Link HIP and rocFFT if available
 if(HIP_LIBRARY)
@@ -270,13 +275,21 @@ target_include_directories(train PRIVATE ${CMAKE_SOURCE_DIR}/src)
 if(HIP_LIBRARY)
     target_compile_definitions(train PRIVATE USE_HIP __HIP_PLATFORM_AMD__)
     target_link_libraries(train PRIVATE ${HIP_LIBRARY})
-    # Use hipcc for linking to ensure device code is properly linked
-    if(HIPCC_EXECUTABLE)
+    # Link HIP kernel object files directly to ensure device code is included
+    # Device code from static libraries doesn't get properly extracted by the linker
+    if(HIPCC_EXECUTABLE AND DEFINED HIP_KERNEL_OBJECTS)
+        target_sources(train PRIVATE ${HIP_KERNEL_OBJECTS})
+        # Ensure these are treated as object files, not sources
+        set_source_files_properties(${HIP_KERNEL_OBJECTS} PROPERTIES
+            EXTERNAL_OBJECT TRUE
+            GENERATED TRUE
+        )
+        # Use hipcc for linking to ensure device code is properly linked
         set_target_properties(train PROPERTIES
             LINKER_LANGUAGE CXX
         )
-        # Set linker to use hipcc for proper device code linking
-        set(CMAKE_CXX_LINK_EXECUTABLE "${HIPCC_EXECUTABLE} <FLAGS> <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" PARENT_SCOPE)
+        # Override the linker to use hipcc which properly handles device code
+        set(CMAKE_CXX_LINK_EXECUTABLE "${HIPCC_EXECUTABLE} <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" PARENT_SCOPE)
     endif()
 endif()
 
