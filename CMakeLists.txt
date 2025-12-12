@@ -50,8 +50,10 @@ set(AUDIO_SOURCES
     src/audio/preprocessing.cpp
 )
 
-set(DATA_SOURCES
-    src/data/fsd50k_loader.cpp
+set(TRAINING_SOURCES
+    src/training/loss.cpp
+    src/training/optimizer.cpp
+    src/training/trainer.cpp
 )
 
 # Library
@@ -60,6 +62,7 @@ add_library(kan_speech_model STATIC
     ${QUANTUM_SOURCES}
     ${AUDIO_SOURCES}
     ${DATA_SOURCES}
+    ${TRAINING_SOURCES}
 )
 
 target_link_libraries(kan_speech_model PUBLIC
@@ -74,4 +77,8 @@ target_include_directories(example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(audio_example src/example/audio_example.cpp)
 target_link_libraries(audio_example PRIVATE kan_speech_model)
 target_include_directories(audio_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+add_executable(training_example src/example/training_example.cpp)
+target_link_libraries(training_example PRIVATE kan_speech_model)
+target_include_directories(training_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
