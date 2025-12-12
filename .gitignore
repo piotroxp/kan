@@ -1,0 +1,139 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+bin/
+lib/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+*.cmake
+!CMakeLists.txt
+!conan_toolchain.cmake
+
+# Conan
+conanbuild.sh
+conanrun.sh
+conanbuildenv.sh
+conanrunenv.sh
+conan.lock
+graph_info.json
+conan_imports_manifest.txt
+conan_toolchain.cmake
+CMakePresets.json
+
+# Compiled binaries
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.o
+*.obj
+
+# IDE - Visual Studio Code
+.vscode/
+*.code-workspace
+
+# IDE - CLion
+.idea/
+cmake-build-*/
+
+# IDE - Qt Creator
+*.pro.user
+*.pro.user.*
+
+# IDE - Eclipse
+.project
+.cproject
+.settings/
+
+# IDE - Xcode
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+
+# Compiled source
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.#*
+
+# Python (if any scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Documentation builds
+docs/_build/
+docs/html/
+docs/latex/
+
+# Test coverage
+*.gcov
+*.gcda
+*.gcno
+coverage/
+*.info
+
+# Profiling data
+*.prof
+gmon.out
+perf.data*
+
+# Archive files (keep source archives if needed)
+*.zip
+*.tar.gz
+*.tar.bz2
+*.rar
+!archive.zip  # Keep if it's a source archive
+
+# Large data files (uncomment if needed)
+# data/
+# datasets/
+# *.wav
+# *.mp3
+
+# Model checkpoints (uncomment when training is implemented)
+# checkpoints/
+# models/
+# *.pt
+# *.pth
+# *.ckpt
+
