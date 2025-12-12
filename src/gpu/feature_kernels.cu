@@ -268,13 +268,8 @@ namespace GPU {
         
         if (simple_grid.x == 0) simple_grid.x = 1;
         
-        // Launch optimized kernel using hipLaunchKernelGGL for better symbol resolution
-        hipLaunchKernelGGL(
-            batched_mel_spectrogram_optimized_kernel,
-            simple_grid,
-            simple_block,
-            0,
-            stream,
+        // Launch optimized kernel
+        batched_mel_spectrogram_optimized_kernel<<<simple_grid, simple_block, 0, stream>>>(
             audio_batch, mel_filters, mel_spec_batch,
             batch_size, num_samples, num_frames, num_bins, n_mels,
             n_fft, hop_length, win_length

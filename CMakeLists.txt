@@ -270,5 +270,13 @@ target_include_directories(train PRIVATE ${CMAKE_SOURCE_DIR}/src)
 if(HIP_LIBRARY)
     target_compile_definitions(train PRIVATE USE_HIP __HIP_PLATFORM_AMD__)
     target_link_libraries(train PRIVATE ${HIP_LIBRARY})
+    # Use hipcc for linking to ensure device code is properly linked
+    if(HIPCC_EXECUTABLE)
+        set_target_properties(train PROPERTIES
+            LINKER_LANGUAGE CXX
+        )
+        # Set linker to use hipcc for proper device code linking
+        set(CMAKE_CXX_LINK_EXECUTABLE "${HIPCC_EXECUTABLE} <FLAGS> <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" PARENT_SCOPE)
+    endif()
 endif()
 
