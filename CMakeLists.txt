@@ -191,6 +191,15 @@ if(HIP_LIBRARY)
         set(HIP_KERNEL_OBJECTS ${HIP_KERNEL_OBJ} ${HIP_FUSION_OBJ} ${HIP_FEATURE_OBJ} ${HIP_QUANTUM_OBJ})
         message(STATUS "GPU kernels will be compiled with hipcc")
         message(STATUS "HIP kernel objects will be linked directly to executables")
+        
+        # CRITICAL: Set hipcc as the linker for executables that use HIP kernels
+        # Regular linkers (g++/clang++) don't extract .hip_fatbin device code sections from static libraries
+        # hipcc knows how to extract and link device code properly
+        set(CMAKE_CXX_LINK_EXECUTABLE 
+            "${HIPCC_EXECUTABLE} <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>"
+            CACHE STRING "Linker command for HIP executables" FORCE
+        )
+        message(STATUS "Using hipcc for linking executables with HIP kernels")
     else()
         message(WARNING "hipcc not found - GPU kernels will not be compiled")
     endif()
@@ -276,7 +285,7 @@ if(HIP_LIBRARY)
     target_compile_definitions(train PRIVATE USE_HIP __HIP_PLATFORM_AMD__)
     target_link_libraries(train PRIVATE ${HIP_LIBRARY})
     # Link HIP kernel object files directly to ensure device code is included
-    # Device code from static libraries doesn't get properly extracted by the linker
+    # Device code from static libraries doesn't get properly extracted by the regular linker
     if(HIPCC_EXECUTABLE AND DEFINED HIP_KERNEL_OBJECTS)
         target_sources(train PRIVATE ${HIP_KERNEL_OBJECTS})
         # Ensure these are treated as object files, not sources
@@ -284,12 +293,17 @@ if(HIP_LIBRARY)
             EXTERNAL_OBJECT TRUE
             GENERATED TRUE
         )
-        # Use hipcc for linking to ensure device code is properly linked
+        # CRITICAL: Use hipcc for linking to extract device code from .hip_fatbin sections
+        # Regular linkers (g++/clang++) don't extract HIP device code from static libraries
+        # hipcc knows how to extract and link the device code properly
         set_target_properties(train PROPERTIES
             LINKER_LANGUAGE CXX
         )
-        # Override the linker to use hipcc which properly handles device code
-        set(CMAKE_CXX_LINK_EXECUTABLE "${HIPCC_EXECUTABLE} <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" PARENT_SCOPE)
+        # Override linker command to use hipcc which handles device code extraction
+        set(CMAKE_CXX_LINK_EXECUTABLE 
+            "${HIPCC_EXECUTABLE} <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>"
+            PARENT_SCOPE
+        )
     endif()
 endif()
 
