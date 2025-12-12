@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <unistd.h>
+#include <iostream>
 
 // ROCm/HIP memory management
 // Enable HIP for GPU acceleration
@@ -15,43 +17,7 @@
 class ROCmMemoryManager {
 public:
     ROCmMemoryManager() {
-#ifdef USE_HIP
-        // Initialize HIP runtime (hipInit can be called multiple times safely)
-        hipError_t init_err = hipInit(0);
-        // hipInit returns hipSuccess even if already initialized in some ROCm versions
-        if (init_err != hipSuccess) {
-            gpu_available_ = false;
-            return;
-        }
-        
-        // Get device count
-        int deviceCount = 0;
-        hipError_t err = hipGetDeviceCount(&deviceCount);
-        
-        if (err == hipSuccess && deviceCount > 0) {
-            // Try to set device and verify it works
-            hipError_t set_err = hipSetDevice(0);
-            if (set_err == hipSuccess) {
-                // Verify device properties can be retrieved
-                hipDeviceProp_t prop;
-                hipError_t prop_err = hipGetDeviceProperties(&prop, 0);
-                if (prop_err == hipSuccess) {
-                    gpu_available_ = true;
-                    // Successfully initialized GPU
-                } else {
-                    gpu_available_ = false;
-                }
-            } else {
-                gpu_available_ = false;
-            }
-        } else {
-            // Device count is 0 or error occurred
-            // This might happen if GPU is in low-power state
-            gpu_available_ = false;
-        }
-#else
-        gpu_available_ = false;
-#endif
+        gpu_available_ = detect_gpu();
     }
     
     // Allocate device memory
@@ -130,11 +96,62 @@ public:
     }
     
     // Check if GPU is available
-    bool is_gpu_available() {
+    bool is_gpu_available() const {
         return gpu_available_;
     }
     
 private:
+    bool detect_gpu() {
+#ifdef USE_HIP
+        // Force HIP initialization
+        hipError_t init_err = hipInit(0);
+        if (init_err != hipSuccess) {
+            std::cerr << "[GPU DEBUG] hipInit failed: " << init_err << std::endl;
+            return false;
+        }
+        std::cerr << "[GPU DEBUG] hipInit succeeded" << std::endl;
+        
+        // Get device count (retry once if needed)
+        int deviceCount = 0;
+        hipError_t err = hipGetDeviceCount(&deviceCount);
+        std::cerr << "[GPU DEBUG] hipGetDeviceCount: err=" << err << " count=" << deviceCount << std::endl;
+        
+        if (err != hipSuccess || deviceCount == 0) {
+            // Retry once after brief delay
+            std::cerr << "[GPU DEBUG] Retrying after 50ms delay..." << std::endl;
+            usleep(50000);  // 50ms
+            err = hipGetDeviceCount(&deviceCount);
+            std::cerr << "[GPU DEBUG] Retry hipGetDeviceCount: err=" << err << " count=" << deviceCount << std::endl;
+            if (err != hipSuccess || deviceCount == 0) {
+                std::cerr << "[GPU DEBUG] GPU detection failed: no devices" << std::endl;
+                return false;
+            }
+        }
+        
+        // Set device
+        hipError_t set_err = hipSetDevice(0);
+        std::cerr << "[GPU DEBUG] hipSetDevice(0): " << set_err << std::endl;
+        if (set_err != hipSuccess) {
+            std::cerr << "[GPU DEBUG] hipSetDevice failed" << std::endl;
+            return false;
+        }
+        
+        // Verify device properties
+        hipDeviceProp_t prop;
+        hipError_t prop_err = hipGetDeviceProperties(&prop, 0);
+        std::cerr << "[GPU DEBUG] hipGetDeviceProperties: " << prop_err << std::endl;
+        if (prop_err == hipSuccess) {
+            std::cerr << "[GPU DEBUG] GPU detected: " << prop.name << " (" << (prop.totalGlobalMem / (1024*1024)) << " MB)" << std::endl;
+            return true;
+        }
+        std::cerr << "[GPU DEBUG] hipGetDeviceProperties failed" << std::endl;
+        return false;
+#else
+        std::cerr << "[GPU DEBUG] USE_HIP not defined" << std::endl;
+        return false;
+#endif
+    }
+    
     bool gpu_available_;
 };
 

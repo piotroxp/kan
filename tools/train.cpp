@@ -3,9 +3,36 @@
 #include "training/gpu_config.hpp"
 #include "model/speech_model.hpp"
 
+#ifdef USE_HIP
+#include <hip/hip_runtime.h>
+#endif
+
 int main(int argc, char* argv[]) {
     std::cout << "=== KAN Speech Model Training ===" << std::endl;
     std::cout << std::endl;
+    
+    // Force HIP initialization early
+#ifdef USE_HIP
+    std::cout << "[MAIN DEBUG] USE_HIP is defined" << std::endl;
+    std::cout << "[MAIN DEBUG] Initializing HIP..." << std::endl;
+    hipError_t init = hipInit(0);
+    std::cout << "[MAIN DEBUG] hipInit result: " << init << " (0=success)" << std::endl;
+    
+    int count = 0;
+    hipError_t count_err = hipGetDeviceCount(&count);
+    std::cout << "[MAIN DEBUG] Device count: " << count << " (err: " << count_err << ")" << std::endl;
+    
+    if (count > 0) {
+        hipDeviceProp_t prop;
+        hipError_t prop_err = hipGetDeviceProperties(&prop, 0);
+        std::cout << "[MAIN DEBUG] Device properties: " << prop_err << std::endl;
+        if (prop_err == 0) {
+            std::cout << "[MAIN DEBUG] GPU: " << prop.name << std::endl;
+        }
+    }
+#else
+    std::cout << "[MAIN DEBUG] USE_HIP is NOT defined" << std::endl;
+#endif
     
     // Print GPU info
     GPUTrainingConfig::print_gpu_info();

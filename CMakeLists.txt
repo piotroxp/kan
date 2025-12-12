@@ -213,4 +213,9 @@ target_include_directories(inference_optimized_example PRIVATE ${CMAKE_SOURCE_DI
 add_executable(train tools/train.cpp)
 target_link_libraries(train PRIVATE kan_speech_model)
 target_include_directories(train PRIVATE ${CMAKE_SOURCE_DIR}/src)
+# Propagate HIP definitions to executable
+if(HIP_LIBRARY)
+    target_compile_definitions(train PRIVATE USE_HIP __HIP_PLATFORM_AMD__)
+    target_link_libraries(train PRIVATE ${HIP_LIBRARY})
+endif()
 

@@ -9,6 +9,7 @@
 #include "../gpu/rocm_manager.hpp"
 #include <vector>
 #include <memory>
+#include <iostream>
 
 // Unified speech model integrating all components
 class SpeechModel {
@@ -35,12 +36,16 @@ public:
         
         // Create GPU layers if GPU is available
         if (use_gpu_) {
+            std::cerr << "[MODEL DEBUG] Creating GPU layers..." << std::endl;
             gpu_semantic_layer_ = std::make_unique<GPUKANLayer>(
                 KANBasis::BSpline, embedding_dim, embedding_dim, 5, 3
             );
             gpu_classification_head_ = std::make_unique<GPUKANLayer>(
                 KANBasis::BSpline, embedding_dim, num_classes, 5, 3
             );
+            std::cerr << "[MODEL DEBUG] GPU layers created successfully" << std::endl;
+        } else {
+            std::cerr << "[MODEL DEBUG] GPU not available, using CPU layers" << std::endl;
         }
     }
     
@@ -63,15 +68,19 @@ public:
         
         // Use GPU layer if available, otherwise CPU
         if (use_gpu_ && gpu_semantic_layer_) {
+            std::cerr << "[MODEL DEBUG] Using GPU semantic layer" << std::endl;
             output.semantic_representation = gpu_semantic_layer_->forward(quantum_vector);
         } else {
+            std::cerr << "[MODEL DEBUG] Using CPU semantic layer" << std::endl;
             output.semantic_representation = semantic_layer_.forward(quantum_vector);
         }
         
         // Step 5: Classification
         if (use_gpu_ && gpu_classification_head_) {
+            std::cerr << "[MODEL DEBUG] Using GPU classification head" << std::endl;
             output.classification_logits = gpu_classification_head_->forward(output.semantic_representation);
         } else {
+            std::cerr << "[MODEL DEBUG] Using CPU classification head" << std::endl;
             output.classification_logits = classification_head_.forward(output.semantic_representation);
         }
         
