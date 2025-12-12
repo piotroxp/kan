@@ -91,6 +91,7 @@ set(MODEL_SOURCES
 set(GPU_SOURCES
     src/gpu/rocm_manager.cpp
     src/gpu/hip_kernels.cpp
+    src/gpu/gpu_kan_layer.cpp
 )
 
 # HIP kernel sources (compiled with hipcc)

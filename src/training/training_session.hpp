@@ -7,6 +7,9 @@
 #include "../audio/preprocessing.hpp"
 #include "../core/tensor.hpp"
 #include "../quantum/wavefunction.hpp"
+#include "../gpu/gpu_kan_layer.hpp"
+#include "../gpu/rocm_manager.hpp"
+#include "../training/gpu_config.hpp"
 #include <vector>
 #include <random>
 #include <algorithm>
@@ -80,7 +83,15 @@ public:
         trainer_(batch_size, learning_rate, 4, checkpoint_dir),
         batch_generator_(batch_size),
         num_epochs_(num_epochs),
-        batch_size_(batch_size) {
+        batch_size_(batch_size),
+        gpu_manager_(),
+        use_gpu_(gpu_manager_.is_gpu_available()) {
+        
+        if (use_gpu_) {
+            std::cout << "Training will use GPU acceleration" << std::endl;
+        } else {
+            std::cout << "Training will use CPU (GPU not available)" << std::endl;
+        }
     }
     
     // Train for one epoch
@@ -256,6 +267,8 @@ private:
     BatchGenerator batch_generator_;
     size_t num_epochs_;
     size_t batch_size_;
+    ROCmMemoryManager gpu_manager_;
+    bool use_gpu_;
     
     double compute_label_similarity(const Tensor& label1, const Tensor& label2) {
         double dot_product = 0.0;

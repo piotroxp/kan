@@ -108,7 +108,7 @@ public:
     }
     
     // Check if GPU is available
-    bool is_gpu_available() const {
+    bool is_gpu_available() {
         return gpu_available_;
     }
     
