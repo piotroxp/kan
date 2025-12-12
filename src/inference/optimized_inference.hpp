@@ -7,6 +7,7 @@
 #include <memory>
 #include <map>
 #include <cmath>
+#include <iostream>
 
 // Model quantization for inference optimization
 class ModelQuantizer {

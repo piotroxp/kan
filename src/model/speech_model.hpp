@@ -5,6 +5,8 @@
 #include "../core/bspline_kan.hpp"
 #include "../core/tensor.hpp"
 #include "../quantum/wavefunction.hpp"
+#include "../gpu/gpu_kan_layer.hpp"
+#include "../gpu/rocm_manager.hpp"
 #include <vector>
 #include <memory>
 
@@ -27,7 +29,19 @@ public:
         quantum_embedding_(n_mels, embedding_dim, quantum_grid_size, 12.0, 1.5),
         semantic_layer_(embedding_dim, embedding_dim, 5, 3),  // B-spline KAN
         classification_head_(embedding_dim, num_classes, 5, 3),  // B-spline KAN
-        num_classes_(num_classes) {
+        num_classes_(num_classes),
+        gpu_manager_(),
+        use_gpu_(gpu_manager_.is_gpu_available()) {
+        
+        // Create GPU layers if GPU is available
+        if (use_gpu_) {
+            gpu_semantic_layer_ = std::make_unique<GPUKANLayer>(
+                KANBasis::BSpline, embedding_dim, embedding_dim, 5, 3
+            );
+            gpu_classification_head_ = std::make_unique<GPUKANLayer>(
+                KANBasis::BSpline, embedding_dim, num_classes, 5, 3
+            );
+        }
     }
     
     // Forward pass: Audio -> Features -> Quantum -> Semantic -> Classification
@@ -46,10 +60,20 @@ public:
         // Step 4: Extract semantic representation from quantum embedding
         // Convert wavefunction to real vector (use real/imag parts or magnitude)
         Tensor quantum_vector = wavefunction_to_tensor(output.quantum_embeddings[0]);
-        output.semantic_representation = semantic_layer_.forward(quantum_vector);
+        
+        // Use GPU layer if available, otherwise CPU
+        if (use_gpu_ && gpu_semantic_layer_) {
+            output.semantic_representation = gpu_semantic_layer_->forward(quantum_vector);
+        } else {
+            output.semantic_representation = semantic_layer_.forward(quantum_vector);
+        }
         
         // Step 5: Classification
-        output.classification_logits = classification_head_.forward(output.semantic_representation);
+        if (use_gpu_ && gpu_classification_head_) {
+            output.classification_logits = gpu_classification_head_->forward(output.semantic_representation);
+        } else {
+            output.classification_logits = classification_head_.forward(output.semantic_representation);
+        }
         
         return output;
     }
@@ -104,9 +128,15 @@ public:
 private:
     SincKANMelSpectrogram feature_extractor_;
     QuantumFieldEmbeddingCore quantum_embedding_;
-    BSplineKANLayer semantic_layer_;
-    BSplineKANLayer classification_head_;
+    BSplineKANLayer semantic_layer_;  // CPU fallback
+    BSplineKANLayer classification_head_;  // CPU fallback
     int num_classes_;
+    
+    // GPU layers
+    ROCmMemoryManager gpu_manager_;
+    bool use_gpu_;
+    std::unique_ptr<GPUKANLayer> gpu_semantic_layer_;
+    std::unique_ptr<GPUKANLayer> gpu_classification_head_;
     
     // Pool temporal dimension (mean pooling)
     Tensor pool_temporal(const Tensor& mel_spec) {

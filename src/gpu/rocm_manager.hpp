@@ -16,15 +16,35 @@ class ROCmMemoryManager {
 public:
     ROCmMemoryManager() {
 #ifdef USE_HIP
-        // Initialize HIP
+        // Initialize HIP runtime
+        hipError_t init_err = hipInit(0);
+        if (init_err != hipSuccess) {
+            gpu_available_ = false;
+            return;
+        }
+        
+        // Get device count
         int deviceCount = 0;
         hipError_t err = hipGetDeviceCount(&deviceCount);
-        gpu_available_ = (err == hipSuccess && deviceCount > 0);
         
-        if (gpu_available_) {
-            hipError_t err = hipSetDevice(0);  // Use first device
-            (void)err;  // Ignore errors for initialization
+        if (err == hipSuccess && deviceCount > 0) {
+            // Try to set device and verify it works
+            hipError_t set_err = hipSetDevice(0);
+            if (set_err == hipSuccess) {
+                // Verify device properties can be retrieved
+                hipDeviceProp_t prop;
+                hipError_t prop_err = hipGetDeviceProperties(&prop, 0);
+                if (prop_err == hipSuccess) {
+                    gpu_available_ = true;
+                    // Successfully initialized GPU
+                } else {
+                    gpu_available_ = false;
+                }
+            } else {
+                gpu_available_ = false;
+            }
         } else {
+            // Device count is 0 or error occurred
             gpu_available_ = false;
         }
 #else
