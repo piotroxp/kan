@@ -102,3 +102,8 @@ double sinc_phi(double x,
 double poisson_residual(double u_xx, double u_yy, double f) {
   return u_xx + u_yy - f;
 }
+
+
+int main() {
+  
+}
