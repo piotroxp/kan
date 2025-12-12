@@ -101,3 +101,4 @@ private:
     std::vector<std::complex<double>> psi_; // Wavefunction values
 };
 
+

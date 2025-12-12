@@ -31,3 +31,4 @@ If this detects the GPU, the issue is in the application's initialization order.
 
 *System is functional - GPU will be used once detection is fixed*
 
+

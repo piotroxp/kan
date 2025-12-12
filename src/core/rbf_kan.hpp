@@ -32,3 +32,4 @@ private:
     double grid_min_, grid_max_, grid_spacing_;
 };
 
+

@@ -78,3 +78,4 @@ TEST_CASE("Wavefunction normalization", "[wavefunction]") {
     REQUIRE(norm_sq == Approx(1.0).margin(0.01));
 }
 
+
