@@ -56,6 +56,14 @@ set(TRAINING_SOURCES
     src/training/trainer.cpp
 )
 
+set(MODEL_SOURCES
+    src/model/speech_model.cpp
+)
+
+set(INFERENCE_SOURCES
+    src/inference/inference_engine.cpp
+)
+
 # Library
 add_library(kan_speech_model STATIC
     ${CORE_SOURCES}
@@ -63,6 +71,8 @@ add_library(kan_speech_model STATIC
     ${AUDIO_SOURCES}
     ${DATA_SOURCES}
     ${TRAINING_SOURCES}
+    ${MODEL_SOURCES}
+    ${INFERENCE_SOURCES}
 )
 
 target_link_libraries(kan_speech_model PUBLIC
@@ -81,4 +91,8 @@ target_include_directories(audio_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(training_example src/example/training_example.cpp)
 target_link_libraries(training_example PRIVATE kan_speech_model)
 target_include_directories(training_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+add_executable(full_model_example src/example/full_model_example.cpp)
+target_link_libraries(full_model_example PRIVATE kan_speech_model)
+target_include_directories(full_model_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
