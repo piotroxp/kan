@@ -1,0 +1,1 @@
+. "/home/piotro/Documents/kan/deactivate_conanrunenv-release-x86_64.sh"
