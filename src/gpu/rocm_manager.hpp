@@ -8,6 +8,7 @@
 #include <iostream>
 #include <mutex>
 #include <unordered_map>
+#include <atomic>
 
 // ROCm/HIP memory management
 // Enable HIP for GPU acceleration
@@ -27,13 +28,14 @@ public:
     void* allocate(size_t bytes) {
 #ifdef USE_HIP
         if (gpu_available_) {
-            // Check memory limit before allocating
+            // Check memory limit before allocating (using static tracking)
             std::lock_guard<std::mutex> lock(memory_mutex_);
-            if (allocated_memory_ + bytes > memory_limit_) {
+            size_t current_allocated = allocated_memory_.load();
+            if (current_allocated + bytes > memory_limit_) {
                 // Would exceed 90% limit, fallback to CPU
                 std::cerr << "Warning: GPU memory limit (90%) would be exceeded. "
                           << "Requested: " << (bytes / (1024*1024)) << " MB, "
-                          << "Available: " << ((memory_limit_ - allocated_memory_) / (1024*1024)) << " MB. "
+                          << "Available: " << ((memory_limit_ - current_allocated) / (1024*1024)) << " MB. "
                           << "Falling back to CPU." << std::endl;
                 return std::malloc(bytes);
             }
@@ -45,7 +47,7 @@ public:
                 return std::malloc(bytes);
             }
             
-            // Track allocation
+            // Track allocation (static, shared across all instances)
             allocated_memory_ += bytes;
             allocation_sizes_[ptr] = bytes;
             return ptr;
@@ -61,7 +63,7 @@ public:
 #ifdef USE_HIP
             if (gpu_available_) {
                 std::lock_guard<std::mutex> lock(memory_mutex_);
-                // Look up allocation size and update tracking
+                // Look up allocation size and update tracking (static, shared)
                 auto it = allocation_sizes_.find(ptr);
                 if (it != allocation_sizes_.end()) {
                     allocated_memory_ -= it->second;
@@ -137,30 +139,34 @@ public:
     }
     size_t get_allocated_memory() const { 
         std::lock_guard<std::mutex> lock(memory_mutex_);
-        return allocated_memory_; 
+        return allocated_memory_.load(); 
     }
     size_t get_available_memory() const { 
         std::lock_guard<std::mutex> lock(memory_mutex_);
-        return memory_limit_ - allocated_memory_; 
+        return memory_limit_ - allocated_memory_.load(); 
     }
     
 private:
     void initialize_memory_limits() {
 #ifdef USE_HIP
         if (gpu_available_) {
-            hipDeviceProp_t prop;
-            hipError_t err = hipGetDeviceProperties(&prop, 0);
-            if (err == hipSuccess) {
-                total_memory_ = prop.totalGlobalMem;
-                // Set limit to 90% of total GPU memory (10% reserved for system)
-                memory_limit_ = static_cast<size_t>(total_memory_ * 0.90);
-                allocated_memory_ = 0;
-                
-                std::cout << "GPU Memory Configuration:" << std::endl;
-                std::cout << "  Total GPU Memory: " << (total_memory_ / (1024*1024)) << " MB" << std::endl;
-                std::cout << "  Application Limit (90%): " << (memory_limit_ / (1024*1024)) << " MB" << std::endl;
-                std::cout << "  System Reserve (10%): " << ((total_memory_ - memory_limit_) / (1024*1024)) << " MB" << std::endl;
-            }
+            // Use static initialization to ensure memory limits are set only once
+            static std::once_flag init_flag;
+            std::call_once(init_flag, []() {
+                hipDeviceProp_t prop;
+                hipError_t err = hipGetDeviceProperties(&prop, 0);
+                if (err == hipSuccess) {
+                    total_memory_ = prop.totalGlobalMem;
+                    // Set limit to 90% of total GPU memory (10% reserved for system)
+                    memory_limit_ = static_cast<size_t>(total_memory_ * 0.90);
+                    allocated_memory_.store(0);
+                    
+                    std::cout << "GPU Memory Configuration:" << std::endl;
+                    std::cout << "  Total GPU Memory: " << (total_memory_ / (1024*1024)) << " MB" << std::endl;
+                    std::cout << "  Application Limit (90%): " << (memory_limit_ / (1024*1024)) << " MB" << std::endl;
+                    std::cout << "  System Reserve (10%): " << ((total_memory_ - memory_limit_) / (1024*1024)) << " MB" << std::endl;
+                }
+            });
         }
 #endif
     }
@@ -204,11 +210,13 @@ private:
     }
     
     bool gpu_available_;
-    size_t total_memory_ = 0;
-    size_t memory_limit_ = 0;
-    size_t allocated_memory_ = 0;
-    mutable std::mutex memory_mutex_;
-    std::unordered_map<void*, size_t> allocation_sizes_;
+    
+    // Static members for global memory tracking across all instances
+    static size_t total_memory_;
+    static size_t memory_limit_;
+    static std::atomic<size_t> allocated_memory_;
+    static std::mutex memory_mutex_;
+    static std::unordered_map<void*, size_t> allocation_sizes_;
 };
 
 // GPU tensor (wrapper for GPU memory)
