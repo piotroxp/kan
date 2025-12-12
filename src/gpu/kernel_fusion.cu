@@ -117,3 +117,4 @@ namespace KernelFusion {
 #endif // USE_HIP
 
 
+
