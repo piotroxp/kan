@@ -16,8 +16,9 @@ class ROCmMemoryManager {
 public:
     ROCmMemoryManager() {
 #ifdef USE_HIP
-        // Initialize HIP runtime
+        // Initialize HIP runtime (hipInit can be called multiple times safely)
         hipError_t init_err = hipInit(0);
+        // hipInit returns hipSuccess even if already initialized in some ROCm versions
         if (init_err != hipSuccess) {
             gpu_available_ = false;
             return;
@@ -45,6 +46,7 @@ public:
             }
         } else {
             // Device count is 0 or error occurred
+            // This might happen if GPU is in low-power state
             gpu_available_ = false;
         }
 #else
