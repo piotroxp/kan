@@ -81,6 +81,8 @@ set(TRAINING_SOURCES
     src/training/gradients.cpp
     src/training/training_session.cpp
     src/training/gpu_config.cpp
+    src/training/backprop.cpp
+    src/training/evaluation.cpp
 )
 
 set(MODEL_SOURCES
@@ -173,6 +175,14 @@ target_include_directories(full_model_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(language_example src/example/language_example.cpp)
 target_link_libraries(language_example PRIVATE kan_speech_model)
 target_include_directories(language_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+add_executable(evaluation_example src/example/evaluation_example.cpp)
+target_link_libraries(evaluation_example PRIVATE kan_speech_model)
+target_include_directories(evaluation_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+add_executable(dataset_example src/example/dataset_example.cpp)
+target_link_libraries(dataset_example PRIVATE kan_speech_model)
+target_include_directories(dataset_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 # Training tool
 add_executable(train tools/train.cpp)
