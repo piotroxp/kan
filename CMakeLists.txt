@@ -54,10 +54,12 @@ set(TRAINING_SOURCES
     src/training/loss.cpp
     src/training/optimizer.cpp
     src/training/trainer.cpp
+    src/training/gradients.cpp
 )
 
 set(MODEL_SOURCES
     src/model/speech_model.cpp
+    src/model/language_model.cpp
 )
 
 set(INFERENCE_SOURCES
@@ -95,4 +97,8 @@ target_include_directories(training_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(full_model_example src/example/full_model_example.cpp)
 target_link_libraries(full_model_example PRIVATE kan_speech_model)
 target_include_directories(full_model_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+add_executable(language_example src/example/language_example.cpp)
+target_link_libraries(language_example PRIVATE kan_speech_model)
+target_include_directories(language_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
