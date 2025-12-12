@@ -81,13 +81,31 @@ public:
         size_t batch_size = 32,
         double learning_rate = 1e-4,
         size_t num_epochs = 10
-    ) : model_(80, 256, 200, 1024),
+    ) : checkpoint_dir_(checkpoint_dir),
+        model_(80, 256, 200, 1024),
         trainer_(batch_size, learning_rate, 4, checkpoint_dir),
         batch_generator_(batch_size),
         num_epochs_(num_epochs),
         batch_size_(batch_size),
         gpu_manager_(),
         use_gpu_(gpu_manager_.is_gpu_available()) {
+        
+        // Create checkpoint directory
+        std::string mkdir_cmd = "mkdir -p " + checkpoint_dir_;
+        system(mkdir_cmd.c_str());
+        
+        // Try to load checkpoint if exists
+        if (CheckpointManager::checkpoint_exists(checkpoint_dir + "/best_model.ckpt")) {
+            std::cout << "Loading checkpoint from: " << checkpoint_dir << "/best_model.ckpt" << std::endl;
+            Checkpoint loaded = CheckpointManager::load_model_checkpoint(
+                checkpoint_dir + "/best_model.ckpt",
+                model_
+            );
+            if (loaded.epoch > 0) {
+                std::cout << "  Resumed from epoch: " << loaded.epoch << ", step: " << loaded.step << std::endl;
+                std::cout << "  Best loss: " << loaded.best_loss << std::endl;
+            }
+        }
         
         if (use_gpu_) {
             std::cout << "Training will use GPU acceleration" << std::endl;
@@ -290,6 +308,7 @@ public:
     }
     
 private:
+    std::string checkpoint_dir_;
     SpeechModel model_;
     Trainer trainer_;
     BatchGenerator batch_generator_;

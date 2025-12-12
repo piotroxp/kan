@@ -53,10 +53,8 @@ public:
     // Forward pass (GPU or CPU)
     Tensor forward(const Tensor& input) {
         if (use_gpu_) {
-            std::cerr << "[GPUKAN DEBUG] Forward pass on GPU" << std::endl;
             return forward_gpu(input);
         } else {
-            std::cerr << "[GPUKAN DEBUG] Forward pass on CPU" << std::endl;
             return forward_cpu(input);
         }
     }
@@ -191,11 +189,9 @@ private:
         }
         
         // Synchronize
-        std::cerr << "[GPUKAN DEBUG] forward_gpu: synchronizing..." << std::endl;
         manager_.synchronize();
         
         // Copy output back
-        std::cerr << "[GPUKAN DEBUG] forward_gpu: copying " << n_out_ << " elements from GPU" << std::endl;
         std::vector<float> output_vec(n_out_);
         manager_.copy_to_host(gpu_output_, output_vec.data(),
                               n_out_ * sizeof(float));

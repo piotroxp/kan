@@ -106,48 +106,35 @@ private:
         // Force HIP initialization
         hipError_t init_err = hipInit(0);
         if (init_err != hipSuccess) {
-            std::cerr << "[GPU DEBUG] hipInit failed: " << init_err << std::endl;
             return false;
         }
-        std::cerr << "[GPU DEBUG] hipInit succeeded" << std::endl;
-        
         // Get device count (retry once if needed)
         int deviceCount = 0;
         hipError_t err = hipGetDeviceCount(&deviceCount);
-        std::cerr << "[GPU DEBUG] hipGetDeviceCount: err=" << err << " count=" << deviceCount << std::endl;
         
         if (err != hipSuccess || deviceCount == 0) {
             // Retry once after brief delay
-            std::cerr << "[GPU DEBUG] Retrying after 50ms delay..." << std::endl;
             usleep(50000);  // 50ms
             err = hipGetDeviceCount(&deviceCount);
-            std::cerr << "[GPU DEBUG] Retry hipGetDeviceCount: err=" << err << " count=" << deviceCount << std::endl;
             if (err != hipSuccess || deviceCount == 0) {
-                std::cerr << "[GPU DEBUG] GPU detection failed: no devices" << std::endl;
                 return false;
             }
         }
         
         // Set device
         hipError_t set_err = hipSetDevice(0);
-        std::cerr << "[GPU DEBUG] hipSetDevice(0): " << set_err << std::endl;
         if (set_err != hipSuccess) {
-            std::cerr << "[GPU DEBUG] hipSetDevice failed" << std::endl;
             return false;
         }
         
         // Verify device properties
         hipDeviceProp_t prop;
         hipError_t prop_err = hipGetDeviceProperties(&prop, 0);
-        std::cerr << "[GPU DEBUG] hipGetDeviceProperties: " << prop_err << std::endl;
         if (prop_err == hipSuccess) {
-            std::cerr << "[GPU DEBUG] GPU detected: " << prop.name << " (" << (prop.totalGlobalMem / (1024*1024)) << " MB)" << std::endl;
             return true;
         }
-        std::cerr << "[GPU DEBUG] hipGetDeviceProperties failed" << std::endl;
         return false;
 #else
-        std::cerr << "[GPU DEBUG] USE_HIP not defined" << std::endl;
         return false;
 #endif
     }

@@ -13,25 +13,7 @@ int main(int argc, char* argv[]) {
     
     // Force HIP initialization early
 #ifdef USE_HIP
-    std::cout << "[MAIN DEBUG] USE_HIP is defined" << std::endl;
-    std::cout << "[MAIN DEBUG] Initializing HIP..." << std::endl;
-    hipError_t init = hipInit(0);
-    std::cout << "[MAIN DEBUG] hipInit result: " << init << " (0=success)" << std::endl;
-    
-    int count = 0;
-    hipError_t count_err = hipGetDeviceCount(&count);
-    std::cout << "[MAIN DEBUG] Device count: " << count << " (err: " << count_err << ")" << std::endl;
-    
-    if (count > 0) {
-        hipDeviceProp_t prop;
-        hipError_t prop_err = hipGetDeviceProperties(&prop, 0);
-        std::cout << "[MAIN DEBUG] Device properties: " << prop_err << std::endl;
-        if (prop_err == 0) {
-            std::cout << "[MAIN DEBUG] GPU: " << prop.name << std::endl;
-        }
-    }
-#else
-    std::cout << "[MAIN DEBUG] USE_HIP is NOT defined" << std::endl;
+    hipInit(0);
 #endif
     
     // Print GPU info
