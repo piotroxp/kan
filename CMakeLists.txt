@@ -205,10 +205,26 @@ add_library(kan_speech_model STATIC
     ${GPU_SOURCES}
 )
 
-# Link HIP if available
+# Link HIP and rocFFT if available
 if(HIP_LIBRARY)
     target_link_libraries(kan_speech_model PUBLIC ${HIP_LIBRARY})
     target_compile_definitions(kan_speech_model PRIVATE USE_HIP __HIP_PLATFORM_AMD__)
+    
+    # Try to find and link rocFFT
+    find_library(ROCFFT_LIBRARY
+        NAMES rocfft
+        PATHS /opt/rocm/lib
+        NO_DEFAULT_PATH
+    )
+    
+    if(ROCFFT_LIBRARY)
+        target_link_libraries(kan_speech_model PUBLIC ${ROCFFT_LIBRARY})
+        target_include_directories(kan_speech_model PUBLIC /opt/rocm/include)
+        message(STATUS "rocFFT found: ${ROCFFT_LIBRARY}")
+    else()
+        message(STATUS "rocFFT not found - using optimized DFT kernels")
+    endif()
+    
     message(STATUS "GPU support enabled with HIP (AMD)")
 endif()
 

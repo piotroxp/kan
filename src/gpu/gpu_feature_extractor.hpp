@@ -199,6 +199,18 @@ private:
             nullptr
         );
         
+        // Check for launch errors
+#ifdef USE_HIP
+        hipError_t err = hipGetLastError();
+        if (err != hipSuccess) {
+            std::cerr << "[GPU ERROR] Batched mel-spectrogram launch failed: " 
+                      << hipGetErrorString(err) << std::endl;
+            manager_.free(gpu_audio);
+            manager_.free(gpu_mel_spec);
+            throw std::runtime_error("GPU kernel launch failed");
+        }
+#endif
+        
         // Synchronize
         manager_.synchronize();
         

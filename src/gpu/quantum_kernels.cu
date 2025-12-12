@@ -58,7 +58,7 @@ __global__ void compute_squeezed_coherent_kernel(
 // Batched quantum embedding (extract alpha, beta, gamma using Chebyshev KAN on GPU)
 __global__ void batched_quantum_embedding_kernel(
     const float* __restrict__ features_batch,  // [batch_size][feature_dim]
-    const float* __restrict__ alpha_coeffs,    // Chebyshev KAN coefficients
+    const float* __restrict__ alpha_coeffs,    // Chebyshev KAN coefficients [feature_dim][chebyshev_order+1]
     const float* __restrict__ beta_coeffs,
     const float* __restrict__ gamma_coeffs,
     float* __restrict__ alpha_out,
@@ -69,82 +69,38 @@ __global__ void batched_quantum_embedding_kernel(
     int chebyshev_order
 ) {
     int batch_idx = blockIdx.x;
-    int thread_idx = threadIdx.x;
+    int param_idx = threadIdx.x;  // 0=alpha, 1=beta, 2=gamma
     
-    if (batch_idx >= batch_size) return;
+    if (batch_idx >= batch_size || param_idx >= 3) return;
     
-    // Each thread processes one output (alpha, beta, or gamma)
-    if (thread_idx == 0) {
-        // Extract alpha using Chebyshev KAN
-        float alpha_sum = 0.0f;
-        for (int i = 0; i < feature_dim; ++i) {
-            float x = features_batch[batch_idx * feature_dim + i];
-            float z = tanhf(x);
-            
-            // Chebyshev polynomial evaluation
-            float T0 = 1.0f;
-            float T1 = z;
-            float result = alpha_coeffs[i * chebyshev_order + 0] * T0;
-            if (chebyshev_order > 1) {
-                result += alpha_coeffs[i * chebyshev_order + 1] * T1;
-            }
-            
-            for (int k = 2; k < chebyshev_order; ++k) {
-                float Tk = 2.0f * z * T1 - T0;
-                result += alpha_coeffs[i * chebyshev_order + k] * Tk;
-                T0 = T1;
-                T1 = Tk;
-            }
-            alpha_sum += result;
+    float* output = (param_idx == 0) ? &alpha_out[batch_idx] : 
+                    (param_idx == 1) ? &beta_out[batch_idx] : &gamma_out[batch_idx];
+    const float* coeffs = (param_idx == 0) ? alpha_coeffs :
+                          (param_idx == 1) ? beta_coeffs : gamma_coeffs;
+    
+    // Extract parameter using Chebyshev KAN
+    float sum = 0.0f;
+    for (int i = 0; i < feature_dim; ++i) {
+        float x = features_batch[batch_idx * feature_dim + i];
+        float z = tanhf(x);
+        
+        // Chebyshev polynomial evaluation
+        float T0 = 1.0f;
+        float T1 = z;
+        float result = coeffs[i * (chebyshev_order + 1) + 0] * T0;
+        if (chebyshev_order > 0) {
+            result += coeffs[i * (chebyshev_order + 1) + 1] * T1;
         }
-        alpha_out[batch_idx] = alpha_sum;
-    } else if (thread_idx == 1) {
-        // Extract beta (same as alpha but with different coefficients)
-        float beta_sum = 0.0f;
-        for (int i = 0; i < feature_dim; ++i) {
-            float x = features_batch[batch_idx * feature_dim + i];
-            float z = tanhf(x);
-            
-            float T0 = 1.0f;
-            float T1 = z;
-            float result = beta_coeffs[i * chebyshev_order + 0] * T0;
-            if (chebyshev_order > 1) {
-                result += beta_coeffs[i * chebyshev_order + 1] * T1;
-            }
-            
-            for (int k = 2; k < chebyshev_order; ++k) {
-                float Tk = 2.0f * z * T1 - T0;
-                result += beta_coeffs[i * chebyshev_order + k] * Tk;
-                T0 = T1;
-                T1 = Tk;
-            }
-            beta_sum += result;
+        
+        for (int k = 2; k <= chebyshev_order; ++k) {
+            float Tk = 2.0f * z * T1 - T0;
+            result += coeffs[i * (chebyshev_order + 1) + k] * Tk;
+            T0 = T1;
+            T1 = Tk;
         }
-        beta_out[batch_idx] = beta_sum;
-    } else if (thread_idx == 2) {
-        // Extract gamma
-        float gamma_sum = 0.0f;
-        for (int i = 0; i < feature_dim; ++i) {
-            float x = features_batch[batch_idx * feature_dim + i];
-            float z = tanhf(x);
-            
-            float T0 = 1.0f;
-            float T1 = z;
-            float result = gamma_coeffs[i * chebyshev_order + 0] * T0;
-            if (chebyshev_order > 1) {
-                result += gamma_coeffs[i * chebyshev_order + 1] * T1;
-            }
-            
-            for (int k = 2; k < chebyshev_order; ++k) {
-                float Tk = 2.0f * z * T1 - T0;
-                result += gamma_coeffs[i * chebyshev_order + k] * Tk;
-                T0 = T1;
-                T1 = Tk;
-            }
-            gamma_sum += result;
-        }
-        gamma_out[batch_idx] = gamma_sum;
+        sum += result;
     }
+    *output = sum;
 }
 
 // Launch wrappers
@@ -190,6 +146,12 @@ namespace GPU {
             alpha_out, beta_out, gamma_out,
             batch_size, feature_dim, chebyshev_order
         );
+        
+        // Check for errors
+        hipError_t err = hipGetLastError();
+        if (err != hipSuccess) {
+            // Error handling in caller
+        }
     }
 }
 

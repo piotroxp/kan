@@ -7,6 +7,7 @@
 #include "../quantum/wavefunction.hpp"
 #include "../gpu/gpu_kan_layer.hpp"
 #include "../gpu/gpu_feature_extractor.hpp"
+#include "../gpu/gpu_quantum_embedding.hpp"
 #include "../gpu/rocm_manager.hpp"
 #include <vector>
 #include <memory>
@@ -34,7 +35,8 @@ public:
         num_classes_(num_classes),
         gpu_manager_(),
         use_gpu_(gpu_manager_.is_gpu_available()),
-        gpu_feature_extractor_(n_mels, 2048, 512, 2048, 0.0, 22050.0, 44100) {
+        gpu_feature_extractor_(n_mels, 2048, 512, 2048, 0.0, 22050.0, 44100),
+        gpu_quantum_embedding_(n_mels, embedding_dim, quantum_grid_size, 12.0, 1.5) {
         
         // Create GPU layers if GPU is available
         if (use_gpu_) {
@@ -87,29 +89,40 @@ public:
         outputs.reserve(audio_batch.size());
         
         // Process batch on GPU if available
-        if (use_gpu_ && gpu_semantic_layer_ && gpu_classification_head_ && gpu_feature_extractor_.is_using_gpu()) {
-            // Extract features on GPU (BATCHED - major performance boost!)
+        if (use_gpu_ && gpu_semantic_layer_ && gpu_classification_head_ && 
+            gpu_feature_extractor_.is_using_gpu() && gpu_quantum_embedding_.is_using_gpu()) {
+            
+            // Step 1: Extract features on GPU (BATCHED)
             std::vector<Tensor> mel_specs = gpu_feature_extractor_.process_batch(audio_batch);
             
-            // Process quantum embeddings and semantic layers
+            // Step 2: Pool temporal dimension (fast CPU operation)
+            std::vector<Tensor> pooled_features;
+            pooled_features.reserve(mel_specs.size());
+            for (const auto& mel_spec : mel_specs) {
+                pooled_features.push_back(pool_temporal(mel_spec));
+            }
+            
+            // Step 3: Encode to quantum embeddings on GPU (BATCHED)
+            auto quantum_embeddings_batch = gpu_quantum_embedding_.encode_batch(pooled_features);
+            
+            // Step 4: Convert wavefunctions to tensors and process semantic/classification layers
             std::vector<Tensor> quantum_vectors;
             quantum_vectors.reserve(audio_batch.size());
             
             for (size_t i = 0; i < mel_specs.size(); ++i) {
                 ModelOutput output;
                 output.audio_features = mel_specs[i];
-                Tensor pooled = pool_temporal(output.audio_features);  // Still CPU, but fast
-                output.quantum_embeddings = quantum_embedding_.encode(pooled);  // Still CPU for now
+                output.quantum_embeddings = quantum_embeddings_batch[i];
                 quantum_vectors.push_back(wavefunction_to_tensor(output.quantum_embeddings[0]));
                 outputs.push_back(output);
             }
             
-            // Process semantic layer in batch on GPU
+            // Step 5: Process semantic layer in batch on GPU
             for (size_t i = 0; i < quantum_vectors.size(); ++i) {
                 outputs[i].semantic_representation = gpu_semantic_layer_->forward(quantum_vectors[i]);
             }
             
-            // Process classification in batch on GPU
+            // Step 6: Process classification in batch on GPU
             for (size_t i = 0; i < outputs.size(); ++i) {
                 outputs[i].classification_logits = gpu_classification_head_->forward(outputs[i].semantic_representation);
             }
@@ -174,6 +187,7 @@ private:
     ROCmMemoryManager gpu_manager_;
     bool use_gpu_;
     GPUMelSpectrogram gpu_feature_extractor_;
+    GPUQuantumEmbedding gpu_quantum_embedding_;
     std::unique_ptr<GPUKANLayer> gpu_semantic_layer_;
     std::unique_ptr<GPUKANLayer> gpu_classification_head_;
     

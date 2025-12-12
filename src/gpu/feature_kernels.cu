@@ -5,6 +5,7 @@
 #include <hip/hip_runtime.h>
 #include <hip/hip_runtime_api.h>
 #include <cmath>
+#include <iostream>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -62,7 +63,36 @@ __global__ void apply_mel_filters_kernel(
     }
 }
 
-// Batched mel-spectrogram computation
+// Optimized: Compute magnitude for one frame (used by batched kernel)
+__device__ void compute_frame_magnitude(
+    const float* audio,
+    float* magnitude_out,
+    int start,
+    int num_samples,
+    int n_fft,
+    int win_length,
+    int num_bins
+) {
+    // Apply window and compute magnitude for all frequency bins in parallel
+    int bin_idx = blockIdx.y * blockDim.y + threadIdx.y;
+    if (bin_idx >= num_bins) return;
+    
+    float real_sum = 0.0f;
+    float imag_sum = 0.0f;
+    
+    for (int n = 0; n < win_length && (start + n) < num_samples; ++n) {
+        float sample = audio[start + n];
+        float window = 0.5f * (1.0f - __cosf(2.0f * M_PI * n / (win_length - 1)));
+        float angle = -2.0f * M_PI * bin_idx * n / n_fft;
+        
+        real_sum += sample * window * __cosf(angle);
+        imag_sum += sample * window * __sinf(angle);
+    }
+    
+    magnitude_out[bin_idx] = __fsqrt_rn(real_sum * real_sum + imag_sum * imag_sum);
+}
+
+// Batched mel-spectrogram computation (optimized with better parallelism)
 __global__ void batched_mel_spectrogram_kernel(
     const float* __restrict__ audio_batch,      // [batch_size][num_samples]
     const float* __restrict__ mel_filters,     // [n_mels][num_bins]
@@ -76,42 +106,93 @@ __global__ void batched_mel_spectrogram_kernel(
     int hop_length,
     int win_length
 ) {
-    int batch_idx = blockIdx.x;
-    int frame_mel_idx = threadIdx.x;
+    // Each thread processes one (frame, mel) pair
+    int batch_idx = blockIdx.z;
+    int frame_idx = blockIdx.y;
+    int mel_idx = blockIdx.x * blockDim.x + threadIdx.x;
     
-    if (batch_idx >= batch_size) return;
+    if (batch_idx >= batch_size || frame_idx >= num_frames || mel_idx >= n_mels) return;
     
-    // Process each (frame, mel) pair
-    int total_pairs = num_frames * n_mels;
-    for (int i = frame_mel_idx; i < total_pairs; i += blockDim.x) {
-        int frame = i / n_mels;
-        int mel = i % n_mels;
+    int start = frame_idx * hop_length;
+    
+    // Compute magnitude for this frame (shared across all mel bins)
+    // Use shared memory for magnitude if possible, otherwise compute per mel
+    float sum = 0.0f;
+    
+    // Compute magnitude for each frequency bin and apply mel filter
+    for (int f = 0; f < num_bins; ++f) {
+        // Compute STFT magnitude for this bin
+        float real_sum = 0.0f;
+        float imag_sum = 0.0f;
         
-        // Compute STFT for this frame (simplified - in production use cuFFT)
-        float sum = 0.0f;
-        int start = frame * hop_length;
-        
-        for (int f = 0; f < num_bins; ++f) {
-            float real_sum = 0.0f;
-            float imag_sum = 0.0f;
+        for (int n = 0; n < win_length && (start + n) < num_samples; ++n) {
+            float sample = audio_batch[batch_idx * num_samples + start + n];
+            float window = 0.5f * (1.0f - __cosf(2.0f * M_PI * n / (win_length - 1)));
+            float angle = -2.0f * M_PI * f * n / n_fft;
             
-            // Simple DFT for this frequency bin
-            for (int n = 0; n < win_length && (start + n) < num_samples; ++n) {
-                float sample = audio_batch[batch_idx * num_samples + start + n];
-                float window = 0.5f * (1.0f - __cosf(2.0f * M_PI * n / (win_length - 1)));
-                float angle = -2.0f * M_PI * f * n / n_fft;
-                
-                real_sum += sample * window * __cosf(angle);
-                imag_sum += sample * window * __sinf(angle);
-            }
-            
-            float magnitude = __fsqrt_rn(real_sum * real_sum + imag_sum * imag_sum);
-            float filter_val = mel_filters[mel * num_bins + f];
-            sum += magnitude * filter_val;
+            real_sum += sample * window * __cosf(angle);
+            imag_sum += sample * window * __sinf(angle);
         }
         
-        mel_spec_batch[batch_idx * num_frames * n_mels + frame * n_mels + mel] = __logf(sum + 1e-10f);
+        float magnitude = __fsqrt_rn(real_sum * real_sum + imag_sum * imag_sum);
+        float filter_val = mel_filters[mel_idx * num_bins + f];
+        sum += magnitude * filter_val;
     }
+    
+    int output_idx = batch_idx * num_frames * n_mels + frame_idx * n_mels + mel_idx;
+    mel_spec_batch[output_idx] = __logf(sum + 1e-10f);
+}
+
+// Optimized batched mel-spectrogram kernel (better parallelism)
+__global__ void batched_mel_spectrogram_optimized_kernel(
+    const float* __restrict__ audio_batch,
+    const float* __restrict__ mel_filters,
+    float* __restrict__ mel_spec_batch,
+    int batch_size,
+    int num_samples,
+    int num_frames,
+    int num_bins,
+    int n_mels,
+    int n_fft,
+    int hop_length,
+    int win_length
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_ops = batch_size * num_frames * n_mels;
+    
+    if (idx >= total_ops) return;
+    
+    // Decompose index
+    int batch_idx = idx / (num_frames * n_mels);
+    int remainder = idx % (num_frames * n_mels);
+    int frame_idx = remainder / n_mels;
+    int mel_idx = remainder % n_mels;
+    
+    int start = frame_idx * hop_length;
+    
+    // Compute STFT magnitude and apply mel filter
+    float sum = 0.0f;
+    for (int f = 0; f < num_bins; ++f) {
+        float real_sum = 0.0f;
+        float imag_sum = 0.0f;
+        
+        // Optimized DFT computation
+        for (int n = 0; n < win_length && (start + n) < num_samples; ++n) {
+            float sample = audio_batch[batch_idx * num_samples + start + n];
+            float window = 0.5f * (1.0f - __cosf(2.0f * M_PI * n / (win_length - 1)));
+            float angle = -2.0f * M_PI * f * n / n_fft;
+            
+            real_sum += sample * window * __cosf(angle);
+            imag_sum += sample * window * __sinf(angle);
+        }
+        
+        float magnitude = __fsqrt_rn(real_sum * real_sum + imag_sum * imag_sum);
+        float filter_val = mel_filters[mel_idx * num_bins + f];
+        sum += magnitude * filter_val;
+    }
+    
+    int output_idx = batch_idx * num_frames * n_mels + frame_idx * n_mels + mel_idx;
+    mel_spec_batch[output_idx] = __logf(sum + 1e-10f);
 }
 
 // Launch wrappers
@@ -163,13 +244,82 @@ namespace GPU {
         int win_length,
         hipStream_t stream = nullptr
     ) {
-        dim3 block(BLOCK_SIZE);
-        dim3 grid(batch_size);
-        batched_mel_spectrogram_kernel<<<grid, block, 0, stream>>>(
+        // For now, use the original kernel (will optimize with rocFFT later)
+        // Optimized grid: (n_mels, num_frames, batch_size) for better parallelism
+        dim3 block(256);  // Threads per block for mel bins
+        dim3 grid((n_mels + block.x - 1) / block.x, num_frames, batch_size);
+        
+        // Use a simpler, more efficient kernel that processes frames in parallel
+        // Each thread handles one (frame, mel) pair
+        int total_ops = batch_size * num_frames * n_mels;
+        dim3 simple_block(256);
+        dim3 simple_grid((total_ops + simple_block.x - 1) / simple_block.x);
+        
+        // Launch optimized kernel (will be replaced with rocFFT version)
+        batched_mel_spectrogram_optimized_kernel<<<simple_grid, simple_block, 0, stream>>>(
             audio_batch, mel_filters, mel_spec_batch,
             batch_size, num_samples, num_frames, num_bins, n_mels,
             n_fft, hop_length, win_length
         );
+        
+        // Check for errors
+        hipError_t err = hipGetLastError();
+        if (err != hipSuccess) {
+            std::cerr << "[KERNEL ERROR] Batched mel-spectrogram launch failed: " 
+                      << hipGetErrorString(err) << std::endl;
+        }
+    }
+    
+    // Optimized batched mel-spectrogram kernel (better parallelism)
+    __global__ void batched_mel_spectrogram_optimized_kernel(
+        const float* __restrict__ audio_batch,
+        const float* __restrict__ mel_filters,
+        float* __restrict__ mel_spec_batch,
+        int batch_size,
+        int num_samples,
+        int num_frames,
+        int num_bins,
+        int n_mels,
+        int n_fft,
+        int hop_length,
+        int win_length
+    ) {
+        int idx = blockIdx.x * blockDim.x + threadIdx.x;
+        int total_ops = batch_size * num_frames * n_mels;
+        
+        if (idx >= total_ops) return;
+        
+        // Decompose index
+        int batch_idx = idx / (num_frames * n_mels);
+        int remainder = idx % (num_frames * n_mels);
+        int frame_idx = remainder / n_mels;
+        int mel_idx = remainder % n_mels;
+        
+        int start = frame_idx * hop_length;
+        
+        // Compute STFT magnitude and apply mel filter
+        float sum = 0.0f;
+        for (int f = 0; f < num_bins; ++f) {
+            float real_sum = 0.0f;
+            float imag_sum = 0.0f;
+            
+            // Optimized DFT computation
+            for (int n = 0; n < win_length && (start + n) < num_samples; ++n) {
+                float sample = audio_batch[batch_idx * num_samples + start + n];
+                float window = 0.5f * (1.0f - __cosf(2.0f * M_PI * n / (win_length - 1)));
+                float angle = -2.0f * M_PI * f * n / n_fft;
+                
+                real_sum += sample * window * __cosf(angle);
+                imag_sum += sample * window * __sinf(angle);
+            }
+            
+            float magnitude = __fsqrt_rn(real_sum * real_sum + imag_sum * imag_sum);
+            float filter_val = mel_filters[mel_idx * num_bins + f];
+            sum += magnitude * filter_val;
+        }
+        
+        int output_idx = batch_idx * num_frames * n_mels + frame_idx * n_mels + mel_idx;
+        mel_spec_batch[output_idx] = __logf(sum + 1e-10f);
     }
 }
 
