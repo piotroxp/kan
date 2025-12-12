@@ -191,15 +191,6 @@ if(HIP_LIBRARY)
         set(HIP_KERNEL_OBJECTS ${HIP_KERNEL_OBJ} ${HIP_FUSION_OBJ} ${HIP_FEATURE_OBJ} ${HIP_QUANTUM_OBJ})
         message(STATUS "GPU kernels will be compiled with hipcc")
         message(STATUS "HIP kernel objects will be linked directly to executables")
-        
-        # CRITICAL: Set hipcc as the linker for executables that use HIP kernels
-        # Regular linkers (g++/clang++) don't extract .hip_fatbin device code sections from static libraries
-        # hipcc knows how to extract and link device code properly
-        set(CMAKE_CXX_LINK_EXECUTABLE 
-            "${HIPCC_EXECUTABLE} <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>"
-            CACHE STRING "Linker command for HIP executables" FORCE
-        )
-        message(STATUS "Using hipcc for linking executables with HIP kernels")
     else()
         message(WARNING "hipcc not found - GPU kernels will not be compiled")
     endif()
@@ -293,16 +284,32 @@ if(HIP_LIBRARY)
             EXTERNAL_OBJECT TRUE
             GENERATED TRUE
         )
-        # CRITICAL: Use hipcc for linking to extract device code from .hip_fatbin sections
-        # Regular linkers (g++/clang++) don't extract HIP device code from static libraries
-        # hipcc knows how to extract and link the device code properly
+        # CRITICAL: Use hipcc for linking THIS target to extract device code from .hip_fatbin sections
+        # Regular linkers (g++/clang++) don't extract HIP device code from object files
+        # The .hip_fatbin sections contain the GPU binary code that HIP runtime needs
+        # hipcc knows how to extract and link this device code properly
+        #
+        # We use a custom link command that runs hipcc instead of the regular linker
+        # This is done by intercepting the link step via a custom command
         set_target_properties(train PROPERTIES
             LINKER_LANGUAGE CXX
         )
-        # Override linker command to use hipcc which handles device code extraction
-        set(CMAKE_CXX_LINK_EXECUTABLE 
-            "${HIPCC_EXECUTABLE} <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>"
-            PARENT_SCOPE
+        
+        # SOLUTION: Use POST_BUILD to relink train with hipcc after regular link
+        # This ensures device code is extracted while not breaking other executables
+        add_custom_command(TARGET train POST_BUILD
+            COMMAND ${HIPCC_EXECUTABLE}
+                CMakeFiles/train.dir/tools/train.cpp.o
+                ${HIP_KERNEL_OBJECTS}
+                -L${CMAKE_CURRENT_BINARY_DIR}
+                -L/opt/rocm/lib
+                libkan_speech_model.a
+                /opt/rocm/lib/libamdhip64.so
+                $<$<BOOL:${ROCFFT_LIBRARY}>:/opt/rocm/lib/librocfft.so>
+                -Wl,-rpath,/opt/rocm/lib
+                -o $<TARGET_FILE:train>
+            COMMENT "Relinking train with hipcc to extract HIP device code from .hip_fatbin sections"
+            VERBATIM
         )
     endif()
 endif()
