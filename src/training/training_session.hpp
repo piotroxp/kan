@@ -12,6 +12,7 @@
 #include "../training/gpu_config.hpp"
 #include "../training/backprop.hpp"
 #include "../training/evaluation.hpp"
+#include "../training/checkpoint_manager.hpp"
 #include <vector>
 #include <random>
 #include <algorithm>
@@ -90,6 +91,12 @@ public:
         gpu_manager_(),
         use_gpu_(gpu_manager_.is_gpu_available()) {
         
+        // Use larger batch size for GPU if available
+        if (use_gpu_ && batch_size < 64) {
+            std::cout << "GPU detected: Using batch size " << batch_size 
+                      << " (consider increasing to 64+ for better GPU utilization)" << std::endl;
+        }
+        
         // Create checkpoint directory
         std::string mkdir_cmd = "mkdir -p " + checkpoint_dir_;
         system(mkdir_cmd.c_str());
@@ -131,12 +138,22 @@ public:
             // Generate batch
             TrainingBatch batch = batch_generator_.generate_synthetic_batch();
             
-            // Process batch through model
+            // Process entire batch on GPU at once (CRITICAL for GPU utilization)
+            if (batch_idx % 10 == 0) {
+                std::cout << "  Processing batch " << (batch_idx + 1) << " (size: " << batch.audio.size() << ")..." << std::endl;
+            }
+            std::vector<SpeechModel::ModelOutput> outputs = model_.forward_batch(batch.audio);
+            if (batch_idx % 10 == 0) {
+                std::cout << "  Batch processing complete" << std::endl;
+            }
+            
+            // Extract features from batch outputs
             std::vector<Tensor> audio_features;
             std::vector<Wavefunction> quantum_embeddings;
+            audio_features.reserve(outputs.size());
+            quantum_embeddings.reserve(outputs.size());
             
-            for (const auto& audio : batch.audio) {
-                auto output = model_.forward(audio);
+            for (const auto& output : outputs) {
                 audio_features.push_back(output.audio_features);
                 quantum_embeddings.push_back(output.quantum_embeddings[0]);
             }

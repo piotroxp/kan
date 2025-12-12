@@ -140,11 +140,16 @@ private:
         for (size_t i = 0; i < input.size(); ++i) {
             input_vec[i] = static_cast<float>(input[i]);
         }
-        manager_.copy_to_device(input_vec.data(), gpu_input_,
-                                n_in_ * sizeof(float));
+        hipError_t err = hipMemcpy(gpu_input_, input_vec.data(),
+                                   n_in_ * sizeof(float), hipMemcpyHostToDevice);
+        if (err != hipSuccess) {
+            std::cerr << "[GPU ERROR] hipMemcpyHostToDevice failed: " << hipGetErrorString(err) << std::endl;
+            return forward_cpu(input);
+        }
         
-        // Launch kernel
+        // Launch kernel with error checking
         hipStream_t stream = nullptr;
+        bool kernel_launched = false;
         
         switch (basis_type_) {
             case KANBasis::BSpline:
@@ -155,6 +160,7 @@ private:
                     n_in_, n_out_, static_cast<int>(grid_size_), order_,
                     stream
                 );
+                kernel_launched = true;
                 break;
             case KANBasis::Chebyshev:
                 GPU::launch_chebyshev_kan(
@@ -164,6 +170,7 @@ private:
                     n_in_, n_out_, order_,
                     stream
                 );
+                kernel_launched = true;
                 break;
             case KANBasis::Sinc:
                 GPU::launch_sinc_kan(
@@ -173,6 +180,7 @@ private:
                     n_in_, n_out_, static_cast<int>(grid_size_), static_cast<float>(param_),
                     stream
                 );
+                kernel_launched = true;
                 break;
             case KANBasis::PiecewiseLinear:
                 GPU::launch_piecewise_linear_kan(
@@ -182,19 +190,40 @@ private:
                     n_in_, n_out_, static_cast<int>(grid_size_),
                     stream
                 );
+                kernel_launched = true;
                 break;
             default:
                 // Fallback to CPU for unsupported types
                 return forward_cpu(input);
         }
         
+        if (!kernel_launched) {
+            std::cerr << "[GPU ERROR] Kernel not launched, falling back to CPU" << std::endl;
+            return forward_cpu(input);
+        }
+        
+        // Check for kernel launch errors
+        err = hipGetLastError();
+        if (err != hipSuccess) {
+            std::cerr << "[GPU ERROR] Kernel launch failed: " << hipGetErrorString(err) << std::endl;
+            return forward_cpu(input);
+        }
+        
         // Synchronize
-        manager_.synchronize();
+        err = hipDeviceSynchronize();
+        if (err != hipSuccess) {
+            std::cerr << "[GPU ERROR] hipDeviceSynchronize failed: " << hipGetErrorString(err) << std::endl;
+            return forward_cpu(input);
+        }
         
         // Copy output back
         std::vector<float> output_vec(n_out_);
-        manager_.copy_to_host(gpu_output_, output_vec.data(),
-                              n_out_ * sizeof(float));
+        err = hipMemcpy(output_vec.data(), gpu_output_,
+                        n_out_ * sizeof(float), hipMemcpyDeviceToHost);
+        if (err != hipSuccess) {
+            std::cerr << "[GPU ERROR] hipMemcpyDeviceToHost failed: " << hipGetErrorString(err) << std::endl;
+            return forward_cpu(input);
+        }
         
         // Convert to Tensor
         Tensor output({static_cast<size_t>(n_out_)});

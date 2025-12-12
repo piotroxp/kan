@@ -79,12 +79,42 @@ public:
         return output;
     }
     
-    // Batch forward pass
+    // Batch forward pass (optimized for GPU)
     std::vector<ModelOutput> forward_batch(const std::vector<AudioBuffer>& audio_batch) {
         std::vector<ModelOutput> outputs;
-        for (const auto& audio : audio_batch) {
-            outputs.push_back(forward(audio));
+        outputs.reserve(audio_batch.size());
+        
+        // Process batch on GPU if available
+        if (use_gpu_ && gpu_semantic_layer_ && gpu_classification_head_) {
+            // Extract features for all samples (CPU - this is the bottleneck)
+            std::vector<Tensor> quantum_vectors;
+            quantum_vectors.reserve(audio_batch.size());
+            
+            for (const auto& audio : audio_batch) {
+                ModelOutput output;
+                output.audio_features = feature_extractor_.process(audio);  // CPU
+                Tensor pooled = pool_temporal(output.audio_features);  // CPU
+                output.quantum_embeddings = quantum_embedding_.encode(pooled);  // CPU
+                quantum_vectors.push_back(wavefunction_to_tensor(output.quantum_embeddings[0]));
+                outputs.push_back(output);
+            }
+            
+            // Process semantic layer in batch on GPU
+            for (size_t i = 0; i < quantum_vectors.size(); ++i) {
+                outputs[i].semantic_representation = gpu_semantic_layer_->forward(quantum_vectors[i]);
+            }
+            
+            // Process classification in batch on GPU
+            for (size_t i = 0; i < outputs.size(); ++i) {
+                outputs[i].classification_logits = gpu_classification_head_->forward(outputs[i].semantic_representation);
+            }
+        } else {
+            // CPU fallback
+            for (const auto& audio : audio_batch) {
+                outputs.push_back(forward(audio));
+            }
         }
+        
         return outputs;
     }
     
@@ -125,6 +155,8 @@ public:
     }
     
     int num_classes() const { return num_classes_; }
+    
+    bool is_gpu_enabled() const { return use_gpu_; }
     
 private:
     SincKANMelSpectrogram feature_extractor_;

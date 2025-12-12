@@ -4,6 +4,7 @@
 
 #ifdef USE_HIP
 #include "hip_kernels.hpp"
+#include <iostream>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -411,10 +412,16 @@ namespace GPU {
     ) {
         dim3 block(BLOCK_SIZE);
         dim3 grid((n_out + block.x - 1) / block.x);
+        if (grid.x == 0) grid.x = 1;
         
         piecewise_linear_kan_forward_kernel<<<grid, block, 0, stream>>>(
             x_in, x_out, coeffs, n_in, n_out, grid_size
         );
+        
+        hipError_t err = hipGetLastError();
+        if (err != hipSuccess) {
+            std::cerr << "[KERNEL ERROR] Piecewise Linear launch failed: " << hipGetErrorString(err) << std::endl;
+        }
     }
 }
 
