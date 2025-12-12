@@ -44,18 +44,34 @@ set(QUANTUM_SOURCES
     src/quantum/quantum_field_embedding.cpp
 )
 
+set(AUDIO_SOURCES
+    src/audio/audio_buffer.cpp
+    src/audio/feature_extraction.cpp
+    src/audio/preprocessing.cpp
+)
+
+set(DATA_SOURCES
+    src/data/fsd50k_loader.cpp
+)
+
 # Library
 add_library(kan_speech_model STATIC
     ${CORE_SOURCES}
     ${QUANTUM_SOURCES}
+    ${AUDIO_SOURCES}
+    ${DATA_SOURCES}
 )
 
 target_link_libraries(kan_speech_model PUBLIC
     Eigen3::Eigen
 )
 
-# Example executable
+# Example executables
 add_executable(example src/example/main.cpp)
 target_link_libraries(example PRIVATE kan_speech_model)
 target_include_directories(example PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+add_executable(audio_example src/example/audio_example.cpp)
+target_link_libraries(audio_example PRIVATE kan_speech_model)
+target_include_directories(audio_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 

@@ -9,6 +9,8 @@ add_executable(tests
     ${CMAKE_SOURCE_DIR}/tests/unit/test_kan_layers.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/test_wavefunction.cpp
     ${CMAKE_SOURCE_DIR}/tests/unit/test_quantum_embedding.cpp
+    ${CMAKE_SOURCE_DIR}/tests/unit/test_audio.cpp
+    ${CMAKE_SOURCE_DIR}/tests/unit/test_features.cpp
 )
 
 target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
