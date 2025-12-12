@@ -6,6 +6,7 @@
 #include "../core/tensor.hpp"
 #include "../quantum/wavefunction.hpp"
 #include "../gpu/gpu_kan_layer.hpp"
+#include "../gpu/gpu_feature_extractor.hpp"
 #include "../gpu/rocm_manager.hpp"
 #include <vector>
 #include <memory>
@@ -32,7 +33,8 @@ public:
         classification_head_(embedding_dim, num_classes, 5, 3),  // B-spline KAN
         num_classes_(num_classes),
         gpu_manager_(),
-        use_gpu_(gpu_manager_.is_gpu_available()) {
+        use_gpu_(gpu_manager_.is_gpu_available()),
+        gpu_feature_extractor_(n_mels, 2048, 512, 2048, 0.0, 22050.0, 44100) {
         
         // Create GPU layers if GPU is available
         if (use_gpu_) {
@@ -85,16 +87,19 @@ public:
         outputs.reserve(audio_batch.size());
         
         // Process batch on GPU if available
-        if (use_gpu_ && gpu_semantic_layer_ && gpu_classification_head_) {
-            // Extract features for all samples (CPU - this is the bottleneck)
+        if (use_gpu_ && gpu_semantic_layer_ && gpu_classification_head_ && gpu_feature_extractor_.is_using_gpu()) {
+            // Extract features on GPU (BATCHED - major performance boost!)
+            std::vector<Tensor> mel_specs = gpu_feature_extractor_.process_batch(audio_batch);
+            
+            // Process quantum embeddings and semantic layers
             std::vector<Tensor> quantum_vectors;
             quantum_vectors.reserve(audio_batch.size());
             
-            for (const auto& audio : audio_batch) {
+            for (size_t i = 0; i < mel_specs.size(); ++i) {
                 ModelOutput output;
-                output.audio_features = feature_extractor_.process(audio);  // CPU
-                Tensor pooled = pool_temporal(output.audio_features);  // CPU
-                output.quantum_embeddings = quantum_embedding_.encode(pooled);  // CPU
+                output.audio_features = mel_specs[i];
+                Tensor pooled = pool_temporal(output.audio_features);  // Still CPU, but fast
+                output.quantum_embeddings = quantum_embedding_.encode(pooled);  // Still CPU for now
                 quantum_vectors.push_back(wavefunction_to_tensor(output.quantum_embeddings[0]));
                 outputs.push_back(output);
             }
@@ -168,6 +173,7 @@ private:
     // GPU layers
     ROCmMemoryManager gpu_manager_;
     bool use_gpu_;
+    GPUMelSpectrogram gpu_feature_extractor_;
     std::unique_ptr<GPUKANLayer> gpu_semantic_layer_;
     std::unique_ptr<GPUKANLayer> gpu_classification_head_;
     

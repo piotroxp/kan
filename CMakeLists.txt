@@ -114,6 +114,8 @@ if(HIP_LIBRARY)
         # Compile .cu files with hipcc as custom commands
         set(HIP_KERNEL_OBJ ${CMAKE_BINARY_DIR}/CMakeFiles/kan_speech_model.dir/src/gpu/hip_kernels.cu.o)
         set(HIP_FUSION_OBJ ${CMAKE_BINARY_DIR}/CMakeFiles/kan_speech_model.dir/src/gpu/kernel_fusion.cu.o)
+        set(HIP_FEATURE_OBJ ${CMAKE_BINARY_DIR}/CMakeFiles/kan_speech_model.dir/src/gpu/feature_kernels.cu.o)
+        set(HIP_QUANTUM_OBJ ${CMAKE_BINARY_DIR}/CMakeFiles/kan_speech_model.dir/src/gpu/quantum_kernels.cu.o)
         
         add_custom_command(
             OUTPUT ${HIP_KERNEL_OBJ}
@@ -149,8 +151,42 @@ if(HIP_LIBRARY)
             COMMENT "Compiling kernel fusion with hipcc"
         )
         
+        add_custom_command(
+            OUTPUT ${HIP_FEATURE_OBJ}
+            COMMAND ${HIPCC_EXECUTABLE}
+                -DUSE_HIP
+                -D__HIP_PLATFORM_AMD__
+                -I${HIP_INCLUDE_DIR}
+                -I${CMAKE_SOURCE_DIR}/src
+                -std=c++17
+                -O3
+                -c
+                ${CMAKE_SOURCE_DIR}/src/gpu/feature_kernels.cu
+                -o ${HIP_FEATURE_OBJ}
+            DEPENDS ${CMAKE_SOURCE_DIR}/src/gpu/feature_kernels.cu
+                    ${CMAKE_SOURCE_DIR}/src/gpu/feature_kernels.hpp
+            COMMENT "Compiling feature extraction kernels with hipcc"
+        )
+        
+        add_custom_command(
+            OUTPUT ${HIP_QUANTUM_OBJ}
+            COMMAND ${HIPCC_EXECUTABLE}
+                -DUSE_HIP
+                -D__HIP_PLATFORM_AMD__
+                -I${HIP_INCLUDE_DIR}
+                -I${CMAKE_SOURCE_DIR}/src
+                -std=c++17
+                -O3
+                -c
+                ${CMAKE_SOURCE_DIR}/src/gpu/quantum_kernels.cu
+                -o ${HIP_QUANTUM_OBJ}
+            DEPENDS ${CMAKE_SOURCE_DIR}/src/gpu/quantum_kernels.cu
+                    ${CMAKE_SOURCE_DIR}/src/gpu/quantum_kernels.hpp
+            COMMENT "Compiling quantum embedding kernels with hipcc"
+        )
+        
         # Add the object files to sources
-        set(GPU_SOURCES ${GPU_SOURCES} ${HIP_KERNEL_OBJ} ${HIP_FUSION_OBJ})
+        set(GPU_SOURCES ${GPU_SOURCES} ${HIP_KERNEL_OBJ} ${HIP_FUSION_OBJ} ${HIP_FEATURE_OBJ} ${HIP_QUANTUM_OBJ})
         message(STATUS "GPU kernels will be compiled with hipcc")
     else()
         message(WARNING "hipcc not found - GPU kernels will not be compiled")
