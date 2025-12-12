@@ -2,6 +2,7 @@
 
 #include "../audio/audio_buffer.hpp"
 #include "../audio/preprocessing.hpp"
+#include "../audio/wav_reader.hpp"
 #include "../core/tensor.hpp"
 #include "fsd50k_loader.hpp"
 #include <string>
@@ -11,6 +12,7 @@
 #include <map>
 #include <iostream>
 #include <cmath>
+#include <filesystem>
 
 // Enhanced FSD50K dataset loader with audio loading
 class FSD50KDataLoader {
@@ -31,20 +33,55 @@ public:
     
     // Load list of clips for the split
     void load_clip_list() {
-        std::string csv_path;
+        // Try different possible paths for CSV files
+        std::vector<std::string> possible_paths;
+        
         if (split_ == "dev") {
-            csv_path = dataset_path_ + "/labels/dev.csv";
+            possible_paths = {
+                dataset_path_ + "/FSD50K.metadata/collection/collection_dev.csv",
+                dataset_path_ + "/metadata/collection/collection_dev.csv",
+                dataset_path_ + "/labels/dev.csv",
+                dataset_path_ + "/dev.csv"
+            };
         } else if (split_ == "train") {
-            csv_path = dataset_path_ + "/labels/train.csv";
-        } else if (split_ == "val") {
-            csv_path = dataset_path_ + "/labels/val.csv";
-        } else if (split_ == "test") {
-            csv_path = dataset_path_ + "/labels/test.csv";
+            possible_paths = {
+                dataset_path_ + "/FSD50K.metadata/collection/collection_train.csv",
+                dataset_path_ + "/metadata/collection/collection_train.csv",
+                dataset_path_ + "/labels/train.csv",
+                dataset_path_ + "/train.csv"
+            };
+        } else if (split_ == "val" || split_ == "eval") {
+            possible_paths = {
+                dataset_path_ + "/FSD50K.metadata/collection/collection_eval.csv",
+                dataset_path_ + "/metadata/collection/collection_eval.csv",
+                dataset_path_ + "/labels/val.csv",
+                dataset_path_ + "/val.csv"
+            };
         } else {
             throw std::runtime_error("Unknown split: " + split_);
         }
         
+        std::ifstream file;
+        bool found = false;
+        std::string csv_path;
+        for (const auto& path : possible_paths) {
+            file.open(path);
+            if (file.is_open()) {
+                csv_path = path;
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            throw std::runtime_error("Cannot open CSV file for split: " + split_);
+        }
+        
+        file.close();
+        
         clips_ = loader_.load_clips(csv_path);
+        
+        std::cout << "Loaded " << clips_.size() << " clips from: " << csv_path << std::endl;
         
         // Filter by split if needed (for dev set)
         // Note: For dev set, we need to filter by split field
@@ -117,19 +154,37 @@ private:
     
     // Load audio safely (with fallback)
     AudioBuffer load_audio_safe(const std::string& fname) {
-        try {
-            // Try to load from file
-            std::string audio_path = dataset_path_ + "/clips/" + split_ + "/" + fname + ".wav";
-            
-            AudioBuffer audio;
-            // Try to load WAV file
-            // For now, use synthetic generation as WAV loading may not be fully implemented
-            // In production, implement proper WAV file reading
-            // if (audio.load_wav(audio_path)) {
-            //     return audio;
-            // }
-        } catch (...) {
-            // Fall through to synthetic generation
+        // Try different possible audio paths
+        std::vector<std::string> possible_paths;
+        
+        if (split_ == "dev") {
+            possible_paths = {
+                dataset_path_ + "/FSD50K.dev_audio/" + fname + ".wav",
+                dataset_path_ + "/FSD50K.dev_audio_16k/" + fname + ".wav",
+                dataset_path_ + "/dev_audio/" + fname + ".wav",
+                dataset_path_ + "/clips/dev/" + fname + ".wav",
+                dataset_path_ + "/clips/" + split_ + "/" + fname + ".wav"
+            };
+        } else if (split_ == "eval" || split_ == "val") {
+            possible_paths = {
+                dataset_path_ + "/FSD50K.eval_audio/" + fname + ".wav",
+                dataset_path_ + "/FSD50K.eval_audio_16k/" + fname + ".wav",
+                dataset_path_ + "/eval_audio/" + fname + ".wav",
+                dataset_path_ + "/clips/eval/" + fname + ".wav"
+            };
+        } else {
+            possible_paths = {
+                dataset_path_ + "/clips/" + split_ + "/" + fname + ".wav",
+                dataset_path_ + "/" + split_ + "/" + fname + ".wav"
+            };
+        }
+        
+        AudioBuffer audio;
+        for (const auto& path : possible_paths) {
+            if (WAVReader::read(path, audio)) {
+                // Successfully loaded
+                return audio;
+            }
         }
         
         // Fallback: generate synthetic audio

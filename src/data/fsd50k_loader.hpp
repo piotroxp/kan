@@ -31,10 +31,26 @@ public:
     
     // Load vocabulary (200 classes)
     void load_vocabulary() {
-        std::string vocab_path = dataset_path_ + "/labels/vocabulary.csv";
-        std::ifstream file(vocab_path);
-        if (!file.is_open()) {
-            throw std::runtime_error("Cannot open vocabulary.csv");
+        // Try different possible paths
+        std::vector<std::string> possible_paths = {
+            dataset_path_ + "/FSD50K.ground_truth/vocabulary.csv",
+            dataset_path_ + "/ground_truth/vocabulary.csv",
+            dataset_path_ + "/labels/vocabulary.csv",
+            dataset_path_ + "/vocabulary.csv"
+        };
+        
+        std::ifstream file;
+        bool found = false;
+        for (const auto& path : possible_paths) {
+            file.open(path);
+            if (file.is_open()) {
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            throw std::runtime_error("Cannot open vocabulary.csv (tried multiple paths)");
         }
         
         std::string line;

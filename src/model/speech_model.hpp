@@ -83,8 +83,20 @@ public:
     
     // Set parameters (for loading checkpoints)
     void set_parameters(const std::vector<std::vector<double>>& params) {
-        // In production, implement proper parameter loading
-        // For now, placeholder
+        // Set semantic layer parameters
+        if (params.size() > 0) {
+            // semantic_layer_.set_parameters(params[0]);  // In production, implement set_parameters
+        }
+        
+        // Set classification head parameters
+        if (params.size() > 1) {
+            // classification_head_.set_parameters(params[1]);  // In production, implement set_parameters
+        }
+        
+        // Set quantum embedding parameters
+        if (params.size() > 2) {
+            // quantum_embedding_.set_parameters(...);  // In production, implement set_parameters
+        }
     }
     
     int num_classes() const { return num_classes_; }

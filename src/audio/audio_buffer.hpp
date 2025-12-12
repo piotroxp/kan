@@ -59,16 +59,5 @@ private:
     int channels_;
 };
 
-// Simple WAV file reader (minimal implementation)
-// For production, consider using libsndfile
-class WAVReader {
-public:
-    // Read WAV file (basic implementation)
-    // Returns true on success
-    static bool read(const std::string& filename, AudioBuffer& buffer) {
-        // For now, return false - will implement with libsndfile or manual parsing
-        // This is a placeholder
-        return false;
-    }
-};
+// WAVReader is now in wav_reader.hpp
 

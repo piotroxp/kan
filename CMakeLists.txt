@@ -72,6 +72,7 @@ set(AUDIO_SOURCES
     src/audio/audio_buffer.cpp
     src/audio/feature_extraction.cpp
     src/audio/preprocessing.cpp
+    src/audio/wav_reader.cpp
 )
 
 set(TRAINING_SOURCES
@@ -83,6 +84,7 @@ set(TRAINING_SOURCES
     src/training/gpu_config.cpp
     src/training/backprop.cpp
     src/training/evaluation.cpp
+    src/training/checkpoint_manager.cpp
 )
 
 set(MODEL_SOURCES
@@ -94,6 +96,7 @@ set(GPU_SOURCES
     src/gpu/rocm_manager.cpp
     src/gpu/hip_kernels.cpp
     src/gpu/gpu_kan_layer.cpp
+    src/gpu/kernel_fusion.cpp
 )
 
 # HIP kernel sources (compiled with hipcc)
@@ -108,8 +111,9 @@ if(HIP_LIBRARY)
     if(HIPCC_EXECUTABLE)
         message(STATUS "Found hipcc: ${HIPCC_EXECUTABLE}")
         
-        # Compile .cu file with hipcc as a custom command
+        # Compile .cu files with hipcc as custom commands
         set(HIP_KERNEL_OBJ ${CMAKE_BINARY_DIR}/CMakeFiles/kan_speech_model.dir/src/gpu/hip_kernels.cu.o)
+        set(HIP_FUSION_OBJ ${CMAKE_BINARY_DIR}/CMakeFiles/kan_speech_model.dir/src/gpu/kernel_fusion.cu.o)
         
         add_custom_command(
             OUTPUT ${HIP_KERNEL_OBJ}
@@ -128,8 +132,25 @@ if(HIP_LIBRARY)
             COMMENT "Compiling HIP kernels with hipcc"
         )
         
-        # Add the object file to sources
-        set(GPU_SOURCES ${GPU_SOURCES} ${HIP_KERNEL_OBJ})
+        add_custom_command(
+            OUTPUT ${HIP_FUSION_OBJ}
+            COMMAND ${HIPCC_EXECUTABLE}
+                -DUSE_HIP
+                -D__HIP_PLATFORM_AMD__
+                -I${HIP_INCLUDE_DIR}
+                -I${CMAKE_SOURCE_DIR}/src
+                -std=c++17
+                -O3
+                -c
+                ${CMAKE_SOURCE_DIR}/src/gpu/kernel_fusion.cu
+                -o ${HIP_FUSION_OBJ}
+            DEPENDS ${CMAKE_SOURCE_DIR}/src/gpu/kernel_fusion.cu
+                    ${CMAKE_SOURCE_DIR}/src/gpu/kernel_fusion.hpp
+            COMMENT "Compiling kernel fusion with hipcc"
+        )
+        
+        # Add the object files to sources
+        set(GPU_SOURCES ${GPU_SOURCES} ${HIP_KERNEL_OBJ} ${HIP_FUSION_OBJ})
         message(STATUS "GPU kernels will be compiled with hipcc")
     else()
         message(WARNING "hipcc not found - GPU kernels will not be compiled")
@@ -183,6 +204,10 @@ target_include_directories(evaluation_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(dataset_example src/example/dataset_example.cpp)
 target_link_libraries(dataset_example PRIVATE kan_speech_model)
 target_include_directories(dataset_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+add_executable(inference_optimized_example src/example/inference_optimized_example.cpp)
+target_link_libraries(inference_optimized_example PRIVATE kan_speech_model)
+target_include_directories(inference_optimized_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 # Training tool
 add_executable(train tools/train.cpp)
