@@ -82,6 +82,15 @@ Quantum field embeddings using squeezed coherent states:
 - Similarity: Born-rule fidelity |⟨ψ₁|ψ₂⟩|²
 - Parameters extracted via Chebyshev KAN
 
+## Research Context
+
+This implementation is informed by two key research papers:
+
+1. **A Practitioner's Guide to Kolmogorov–Arnold Networks** (arXiv:2510.25781v2) - Comprehensive review of KAN architectures, basis functions, and optimization strategies
+2. **KernelEvolve: Scaling Agentic Kernel Coding for Heterogeneous AI Accelerators** (arXiv:2512.23236v2) - Framework for GPU kernel optimization across heterogeneous hardware
+
+See [RESEARCH_CONTEXT.md](RESEARCH_CONTEXT.md) for detailed analysis of how these papers inform the design decisions and implementation choices in this codebase.
+
 ## License
 
 See LICENSE file for details.
