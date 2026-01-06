@@ -35,6 +35,10 @@ All documentation is located in the [`docs/`](docs/) directory:
 - **[TRAINING_ACTIVE.md](docs/TRAINING_ACTIVE.md)** - Active training information
 - **[TRAINING_RUNNING.md](docs/TRAINING_RUNNING.md)** - Training execution details
 
+### Distributed Training
+
+- **[EXO_INTEGRATION.md](docs/EXO_INTEGRATION.md)** - Exo integration guide for distributed training over VPN
+
 ## Features
 
 - **6 KAN Variants**: B-spline, Chebyshev, Sinc, Fourier, RBF, Piecewise Linear
