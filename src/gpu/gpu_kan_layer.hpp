@@ -117,6 +117,8 @@ private:
                 return n_out_ * n_in_ * order_;  // order = num_centers
             case KANBasis::PiecewiseLinear:
                 return n_out_ * n_in_ * grid_size_;
+            case KANBasis::Pattern:
+                return n_out_ * n_in_ * grid_size_;
             default:
                 return n_out_ * n_in_ * grid_size_;
         }
@@ -192,6 +194,8 @@ private:
                 );
                 kernel_launched = true;
                 break;
+            case KANBasis::Pattern:
+                return forward_cpu(input);
             default:
                 // Fallback to CPU for unsupported types
                 return forward_cpu(input);

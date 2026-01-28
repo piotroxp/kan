@@ -6,6 +6,7 @@
 #include "core/fourier_kan.hpp"
 #include "core/rbf_kan.hpp"
 #include "core/piecewise_linear_kan.hpp"
+#include "core/pattern_kan.hpp"
 #include "core/tensor.hpp"
 #include <cmath>
 
@@ -115,22 +116,60 @@ TEST_CASE("RBF KAN layer", "[kan][rbf]") {
 
 TEST_CASE("Piecewise Linear KAN layer", "[kan][piecewise]") {
     PiecewiseLinearKANLayer layer(2, 3, 5);
-    
+
     auto& params = layer.parameters();
     for (size_t i = 0; i < params.size(); ++i) {
         params[i] = 0.1 * i;
     }
-    
+
     Tensor input({2});
     input[0] = 0.5;
     input[1] = -0.5;
-    
+
     Tensor output = layer.forward(input);
-    
+
     REQUIRE(output.shape()[0] == 3);
     for (size_t i = 0; i < output.size(); ++i) {
         REQUIRE(std::isfinite(output[i]));
     }
+}
+
+TEST_CASE("Pattern KAN layer", "[kan][pattern]") {
+    PatternKANLayer layer(2, 3, 7, 3.0, 1.0, 1.0);
+
+    REQUIRE(layer.basis_type() == KANBasis::Pattern);
+    REQUIRE(layer.parameters().size() == static_cast<size_t>(2 * 3 * 7));
+
+    auto& params = layer.parameters();
+    for (size_t idx = 0; idx < params.size(); ++idx) {
+        params[idx] = 0.01 * static_cast<double>((idx % 17) + 1);
+    }
+
+    Tensor input({2});
+    input[0] = 0.25;
+    input[1] = -0.75;
+
+    Tensor output = layer.forward(input);
+
+    REQUIRE(output.shape()[0] == 3);
+    for (size_t i = 0; i < output.size(); ++i) {
+        REQUIRE(std::isfinite(output[i]));
+    }
+
+    Tensor input2({2});
+    input2[0] = 0.5;
+    input2[1] = -0.25;
+
+    Tensor output2 = layer.forward(input2);
+
+    bool differs = false;
+    for (size_t i = 0; i < output.size(); ++i) {
+        if (std::abs(output[i] - output2[i]) > 1e-12) {
+            differs = true;
+            break;
+        }
+    }
+    REQUIRE(differs);
 }
 
 

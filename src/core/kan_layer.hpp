@@ -15,7 +15,8 @@ enum class KANBasis {
     Sinc,
     Fourier,
     RBF,
-    PiecewiseLinear
+    PiecewiseLinear,
+    Pattern
 };
 
 class KANLayer {
