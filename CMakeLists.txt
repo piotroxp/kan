@@ -263,6 +263,25 @@ add_executable(dataset_example src/example/dataset_example.cpp)
 target_link_libraries(dataset_example PRIVATE kan_speech_model)
 target_include_directories(dataset_example PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
+set(BENCH_SOURCES
+    bench/main_bench.cpp
+    bench/datasets/dataset.cpp
+    bench/datasets/discontinuous.cpp
+    bench/datasets/noisy.cpp
+    bench/datasets/categorical.cpp
+    bench/models/mlp.cpp
+    bench/models/kan_wrapper.cpp
+    bench/models/embedding_mlp.cpp
+    bench/models/embedding_kan.cpp
+    bench/train/train_loop.cpp
+    bench/metrics/metrics.cpp
+    bench/report/report.cpp
+)
+
+add_executable(bench ${BENCH_SOURCES})
+target_link_libraries(bench PRIVATE kan_speech_model)
+target_include_directories(bench PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR})
+
 add_executable(inference_optimized_example src/example/inference_optimized_example.cpp)
 target_link_libraries(inference_optimized_example PRIVATE kan_speech_model)
 target_include_directories(inference_optimized_example PRIVATE ${CMAKE_SOURCE_DIR}/src)

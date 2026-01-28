@@ -59,7 +59,8 @@ public:
                 // ∂L/∂c_{j,i,k} = (∂L/∂y_j) * (∂φ_{j,i}/∂c_{j,i,k})
                 // For basis functions, this is the basis function value
                 for (int k = 0; k < grid_size; ++k) {
-                    size_t param_idx = layer.param_index(i, j, k);
+                    size_t param_idx = (static_cast<size_t>(j) * n_in + static_cast<size_t>(i))
+                        * static_cast<size_t>(grid_size) + static_cast<size_t>(k);
                     double basis_val = evaluate_basis_derivative(layer, x_i, i, j, k);
                     grads.parameter_grad[param_idx] += grad_out_j * basis_val;
                 }
@@ -128,6 +129,7 @@ public:
         return gradients;
     }
 };
+
 
 
 

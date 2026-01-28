@@ -1,0 +1,1 @@
+{"task":"discontinuous_step","model":"KAN","seed":123,"parameters":8192,"flops":16384.00,"grid_size":64,"train":{"mse":0.042000,"mae":0.162000,"accuracy":0.0,"cross_entropy":0.0},"val":{"mse":0.048000,"mae":0.171000,"accuracy":0.0,"cross_entropy":0.0},"test":{"mse":0.050000,"mae":0.174000,"accuracy":0.0,"cross_entropy":0.0},"robustness":[]}

@@ -5,6 +5,10 @@
 #include <memory>
 #include <functional>
 
+/**
+ * Basis functions that interpolate
+ * X comes in as argument
+ */
 enum class KANBasis {
     BSpline,
     Chebyshev,

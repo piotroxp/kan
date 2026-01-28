@@ -1,0 +1,1 @@
+{"task":"noisy_moons","model":"MLP","seed":123,"parameters":2048,"flops":4096.00,"grid_size":64,"train":{"mse":0.000000,"mae":0.000000,"accuracy":0.910000,"cross_entropy":0.230000},"val":{"mse":0.000000,"mae":0.000000,"accuracy":0.860000,"cross_entropy":0.310000},"test":{"mse":0.000000,"mae":0.000000,"accuracy":0.850000,"cross_entropy":0.320000},"robustness":[]}
